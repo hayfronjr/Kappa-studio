@@ -1,0 +1,6 @@
+{
+  "name": "RollCall Offline - Roll & Attendance Manager",
+  "description": "Offline-first attendance taker and roster manager for Android, Windows, and desktop with CSV, Excel, PDF, and JSON log export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

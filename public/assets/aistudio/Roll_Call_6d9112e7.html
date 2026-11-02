@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Roll Call</title>
+<style>
+:root{--bg:#f6f5f0;--card:#fff;--tx:#1d2b25;--mu:#6b7770;--g:#116b52;--ln:#e3e1d8;--ok:#e3f3ec;--rd:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121816;--card:#1b2420;--tx:#e8efe9;--mu:#92a199;--g:#3fbf95;--ln:#2b3731;--ok:#1e3a2f;--rd:#ff8a80}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.35 system-ui,sans-serif}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+#app{max-width:720px;margin:auto}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:10px 12px;border-bottom:1px solid var(--ln);z-index:5}
+main{padding:8px 12px 60px}
+h1{margin:0;font-size:20px;color:var(--g)}h2{font-size:14px;margin:18px 0 6px;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.grow{flex:1;min-width:0}.mt{margin-top:8px}.mu{color:var(--mu);font-size:13px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:10px;margin:8px 0}
+button,.btn{padding:9px 12px;border:1px solid var(--ln);border-radius:8px;background:var(--card);color:var(--tx);font:inherit;font-size:14px;cursor:pointer}
+button.b{background:var(--g);border-color:var(--g);color:#fff;font-weight:600}
+.dark button.b{color:#0b1410}@media (prefers-color-scheme:dark){button.b{color:#0b1410}}
+button.d{background:var(--rd);border-color:var(--rd);color:#fff}button.big{width:100%;padding:13px;font-size:16px}
+input,textarea{width:100%;padding:9px;border:1px solid var(--ln);border-radius:8px;background:var(--card);color:var(--tx);font:inherit}
+input.t{font-weight:700;font-size:17px;margin-top:8px}
+.chip{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--ln)}.chip.open{background:var(--ok);color:var(--g)}
+.cnt{font-weight:700;color:var(--g)}
+.p{display:flex;gap:10px;align-items:center;padding:9px 10px;background:var(--card);border:1px solid var(--ln);border-radius:10px;margin:6px 0}
+.p.on{background:var(--ok)}.p input[type=checkbox]{width:28px;height:28px;flex:none;accent-color:var(--g)}
+.nm{font-weight:600}.u{font-size:12px;color:var(--mu)}.u a{color:var(--g);text-decoration:none}.t{font-size:12px;color:var(--g);margin-top:2px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.grid .full{grid-column:1/-1}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:9px 14px;border-radius:99px;font-size:13px;z-index:20;display:none}
+</style></head><body>
+<div id="app"></div><div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const SEED=[["Akwaboah Benedict Kwabena Junior", "Editorial", "0555233330", "Pair 1"], ["Badu Nhyira Afua Kwartemaa", "FISA", "0545184419", "Pair 1"], ["Roland Okyere", "Bible Study", "0594895936", "Pair 2"], ["Grace Sarpong Oppong-Poku", "Editorial", "0535321024", "Pair 2"], ["Wilberforce Amoah Baffour Buadee", "Media Department", "0544102563", "Pair 3"], ["Nhyira Effah Somuah", "Organizing Department", "0535445778", "Pair 3"], ["Theophilus Amankwah", "Media Department", "0509100314", "Pair 4"], ["Boateng Esther Agyeiwaa", "Independence Hall", "0559682281", "Pair 4"], ["Maxwell Danso Agyapong", "Off Campus C", "0257448800", "Pair 5"], ["Esther Asamoah", "Queens Hall", "0592079976 / 0206045914", "Pair 5"], ["Tawiah Nathaniel", "PESPG", "0535701813", "Pair 6"], ["Neizer Benedicta Aba Otuwah", "Off Campus A", "0245962267", "Pair 6"], ["Osei Simeon", "Organizing Department", "0274250427", "Pair 7"], ["Palmer Pearl Aba Obeng", "PESPG", "0559336811", "Pair 7"], ["Sarkodie Raymond", "PESPG", "0539396560", "Pair 8"], ["Martha Amu", "Prayer Force", "0537022732", "Pair 8"], ["John Jeja", "Brunei East", "0553730457", "Pair 9"], ["Helina Asantewaa Norbi", "Ladies’ Wing", "0201416558", "Pair 9"], ["Rhema Lartey", "Organizing Department", "0507706733", "Pair 10"], ["Owoo Justina Yaa", "Bible Study", "0538976364", "Pair 10"], ["Anim Aikins Kelvin", "Brunei West", "0535837350", "Pair 11"], ["Mavis Sarfowaah", "Unity Hall", "0555560903", "Pair 11"], ["Amprofi Benedict", "Prayer Force", "0598103072", "Pair 12"], ["Freda Ghartey", "Brunei West", "0554766411", "Pair 12"], ["Samuel Opoku Okai", "Brunei East", "0595364659", "Pair 13"], ["Paulina Viola Ashun", "Off Campus D", "0555155324", "Pair 13"], ["Michael Forson", "Transport Department", "0256835310", "Pair 14"], ["Blessing Antwi Boasiako", "Off Campus C", "0504144178", "Pair 14"], ["Asamoah Stephen Baidoo", "Republic Hall", "0544783017", "Pair 15"], ["Beatrice Aggrey", "Off Campus B", "0536177610", "Pair 15"], ["Ayivor Eugene", "Bible Study", "0554745519", "Pair 16"], ["Akua Amankwah Obeng", "Brunei East", "0598446551", "Pair 16"], ["Damptey Godfred Konadu", "Evangelism Department", "0509664238 / 0591571190", "Pair 17"], ["Torvor Leticia Venunye", "Business Chamber", "0591067209", "Pair 17"], ["Noah Andoh", "Off Campus B", "0537537902", "Pair 18"], ["Michaela Jane Andoh Sey", "Evangelism Department", "0538269800", "Pair 18"], ["Adoreba Samuel", "Independence Hall", "0598479980", "Pair 19"], ["Bernice Obo Smith", "Off Campus A", "0595558468", "Pair 19"], ["Daniel Akanvari", "Unity Hall", "0535709500", "Pair 20"], ["Emmanuella Mensah", "Republic Hall", "0599508802", "Pair 20"], ["Edmond Kwaku Asuming", "Gents’ Wing", "0534397296", "Pair 21"], ["Naaki Abigail Tetteh", "Music and Drama", "0508699087", "Pair 21"], ["Boamah Bright", "Alumni Coordinator", "0241094347", "Pair 22"], ["Nyankey Rhoda Ayisaah", "Organizing Department", "0545953352", "Pair 22"], ["Oscar Ansah Afari", "Gents’ Wing", "0599906606", "Pair 23"], ["Josephine Ansah", "Organizing Department", "0537925114", "Pair 23"], ["Daniel Fiifi Mensah", "Organizing Department", "0553396239", "Pair 24"], ["Yaa Dansoaa Aidoo", "University Hall", "0536810795", "Pair 24"], ["Jesse Kennedy Nana Oduro", "Off Campus B", "0545060689", "Pair 25"], ["Amoah Godslove", "Treasurer", "0537319597", "Pair 25"], ["Bismark Dickah", "Brunei West", "0531664698", "Pair 26"], ["Deborah Obeng", "Off Campus B", "0596357280", "Pair 26"], ["Dcn. Acheampong Kwabena", "Gents’ Wing", "0531926437", "Pair 27"], ["Blay Addo Erica", "Off Campus C", "0209330755", "Pair 27"], ["Takpa Solomon Kwashie", "Off Campus D", "0553531475 / 0509668655", "Pair 28"], ["Boakye Hannah Dufie", "FISA", "0530696625", "Pair 28"], ["Mckeown Amamoo Kissi", "Evangelism Department", "0204064221", "Pair 29"], ["Abban Kyeraa Stella", "Off Campus C", "0207781185", "Pair 29"], ["Gyamfi John", "Off Campus A", "0534656391", "Pair 30"], ["Sarpong Helena", "Ladies’ Wing", "0536008845", "Pair 30"], ["Prince Darko Affum", "University Hall", "0596218808", "Pair 31"], ["Dcns. Abigail Assan", "H.I.S", "0256560465", "Pair 31"], ["Asamoah Emmanuel Amo", "Off Campus C", "0552807480", "Pair 32"], ["Georgina Kyeponyere", "Ushering Department", "0531571249", "Pair 32"], ["Saah Samuel Kojo Okyere", "Transport Department", "0550427702", "Pair 33"], ["Josephine Amoako Asantewaa", "Off Campus A", "0530163228 / 0509686661", "Pair 33"], ["Mettle Emmrich Nii Teiko", "Media Department", "0539991379", "Pair 34"], ["Sarah Brago", "Off Campus A", "0242109112 / 0597130110", "Pair 34"], ["Boarbil Moses Lebna", "Media Department", "0533325202", "Pair 35"], ["Winnifred Acheampomaa Osei Bonsu", "PESPG", "0503328052", "Pair 35"], ["Michael Quaicoe", "Off Campus B", "0555899329", "Pair 36"], ["Perces Attaah Pokuaah Hammond", "PESPG", "0591298907 / 0509307295", "Pair 36"], ["Kelvin Tettey Natoko", "H.I.S", "0533279076", "Pair 37"], ["Mary Ansah", "Africa Hall", "0535266538", "Pair 37"], ["Brenya Reuben", "Off Campus D", "0539462534", "Pair 38"], ["Ofori Prisca Forson", "Ladies’ Wing", "0533593637", "Pair 38"], ["Hadzor Barnabas Kekeli", "Music and Drama", "0257476141", "Pair 39"], ["Precious Nutifafa", "Ladies’ Wing", "0596837525", "Pair 39"], ["Ezekiel Nti Buobu", "Queens Hall", "0531922211", "Pair 40"], ["Smith Sabina", "Organizing Department", "0532405280", "Pair 40"], ["Andrews Amoako-Ayim", "Africa Hall", "0597120034", "Pair 41"], ["Veronica Konadu Appiah", "Organizing Department", "0536409158", "Pair 41"], ["Barnabas Mensah", "H.I.S", "0256351863", "Pair 42"], ["Abigail Amuzu", "Off Campus C", "0554797050", "Pair 42"], ["Marfo Samuel Baah", "Ushering Department", "0509305873 / 0257023043", "Pair 43"], ["Lovia Osei Agyeiwah", "Off Campus D", "0595249977", "Pair 43"], ["Kelvin Bataabonga Vwalogo", "Off Campus D", "0243491197", "Pair 44"], ["Padmore Aboah", "Gents’ Wing", "0503321499", "Pair 44"], ["Godfred Acheampong", "Prayer Force", "0599460558", "Pair 45"], ["Ebenezer Tamakloe", "Off Campus A", "0531664901", "Pair 45"], ["Dcn. Vincent Mensah Agyapong Owusu", "PDP Coordinator", "0597373129 / 0591966791 / 0509683368", "Pair 46"], ["Acheampong Alex Nkansah", "Evangelism Department", "0537117133 / 0506808236", "Pair 46"], ["Samuel Koramoah Bampo", "Building and Maintenance", "0533004715", "Pair 47"], ["Darkwa Samuel", "Media Department", "0509686088", "Pair 47"], ["Issaka Salia Pius", "Off Campus A", "0257324224", "Pair 48"], ["Benedict Appiah", "Off Campus C", "0558177886", "Pair 48"], ["Amponsah Elijah Weston", "Bible Study", "0530926915", "Pair 49"], ["Joel Ekow Ansah", "Political Chamber", "0531726414", "Pair 49"]];
+const KEY='rollcall-v1';let S={rolls:[],sessions:[]},mem=false;
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){mem=true}};
+(function(){try{const r=localStorage.getItem(KEY);if(r){S=JSON.parse(r);return}}catch(e){mem=true}
+ S={rolls:[{id:'sns',name:'SNS People',members:SEED.map(x=>({id:uid(),name:x[0],unit:x[1],phone:x[2],tag:x[3]}))}],sessions:[]};save()})();
+(function(){try{if(localStorage.getItem('rollcall-imp1'))return;
+ const r=S.rolls.find(x=>x.name==='SNS People');if(!r)return;
+ const L=`Akwaboah Benedict Kwabena Junior|12:08:12
+Badu Nhyira Afua Kwartemaa|12:08:24
+Roland Okyere|11:53:06
+Grace Sarpong Oppong-Poku|11:53:14
+Nhyira Effah Somuah|12:05:56
+Boateng Esther Agyeiwaa|12:18:22
+Osei Simeon|12:02:18
+Palmer Pearl Aba Obeng|12:02:19
+Martha Amu|11:50:32
+John Jeja|12:06:13
+Helina Asantewaa Norbi|11:51:34
+Mavis Sarfowaah|12:17:41
+Amprofi Benedict|11:54:26
+Freda Ghartey|11:54:09
+Paulina Viola Ashun|12:03:06
+Ayivor Eugene|11:53:27
+Damptey Godfred Konadu|12:02:47
+Noah Andoh|12:01:28
+Michaela Jane Andoh Sey|12:01:32
+Adoreba Samuel|12:11:22
+Bernice Obo Smith|12:11:41
+Daniel Akanvari|12:17:28
+Edmond Kwaku Asuming|12:12:36
+Naaki Abigail Tetteh|11:49:34
+Nyankey Rhoda Ayisaah|12:03:32
+Oscar Ansah Afari|12:12:23
+Daniel Fiifi Mensah|11:51:12
+Yaa Dansoaa Aidoo|11:49:07
+Amoah Godslove|11:54:44
+Bismark Dickah|12:19:23
+Deborah Obeng|12:04:45
+Dcn. Acheampong Kwabena|11:59:37
+Blay Addo Erica|11:49:45
+Mckeown Amamoo Kissi|12:17:01
+Abban Kyeraa Stella|11:50:23
+Gyamfi John|12:05:14
+Sarpong Helena|11:51:53
+Dcns. Abigail Assan|11:52:33
+Asamoah Emmanuel Amo|12:12:52
+Georgina Kyeponyere|11:53:39
+Josephine Amoako Asantewaa|12:00:19
+Mettle Emmrich Nii Teiko|11:58:05
+Sarah Brago|11:55:07
+Boarbil Moses Lebna|11:56:20
+Winnifred Acheampomaa Osei Bonsu|11:56:12
+Michael Quaicoe|11:54:34
+Perces Attaah Pokuaah Hammond|11:54:32
+Kelvin Tettey Natoko|11:59:45
+Brenya Reuben|12:04:00
+Ofori Prisca Forson|11:52:50
+Precious Nutifafa|12:17:53
+Smith Sabina|11:50:51
+Andrews Amoako-Ayim|12:08:43
+Veronica Konadu Appiah|12:19:35
+Barnabas Mensah|12:11:09
+Abigail Amuzu|12:10:49
+Kelvin Bataabonga Vwalogo|12:13:50
+Padmore Aboah|12:09:03
+Godfred Acheampong|12:01:09
+Dcn. Vincent Mensah Agyapong Owusu|11:51:25
+Acheampong Alex Nkansah|11:51:24
+Samuel Koramoah Bampo|11:59:07
+Darkwa Samuel|11:57:23
+Issaka Salia Pius|11:50:01
+Benedict Appiah|12:16:40
+Amponsah Elijah Weston|12:06:42`,day='2026-10-31T',marks={};
+ L.split('\n').forEach(l=>{const f=l.split('|'),m=r.members.find(x=>x.name===f[0]);if(m)marks[m.id]=day+f[1]+'Z'});
+ S.sessions.push({id:'imp'+uid(),rollId:r.id,rollName:r.name,title:'SNS Register – 31 Oct 2026',start:day+'11:49:00Z',end:null,status:'open',members:r.members.map(m=>({...m})),marks});
+ save();localStorage.setItem('rollcall-imp1','1')}catch(e){}})();
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const O={day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'};
+const fmt=(i,l)=>new Date(i).toLocaleString(l,O);
+const fday=i=>new Date(i).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+let ui={v:'home',id:null,q:'',f:'all',edit:null,cf:null};
+const roll=id=>S.rolls.find(r=>r.id===id),sess=id=>S.sessions.find(s=>s.id===id);
+const cnt=s=>s.members.filter(m=>s.marks[m.id]).length;
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2600)};
+const cb=(a,i,l)=>ui.cf===a+i?`<button class="d" data-a="${a}" data-i="${i}">Tap again to confirm</button>`:`<button data-a="ask" data-k="${a+i}">${l}</button>`;
+const tel=p=>{const n=String(p||'').split('/')[0].replace(/\s/g,'');return p?` · <a href="tel:${esc(n)}">${esc(p)}</a>`:''};
+function go(v,id){ui.v=v;ui.id=id||null;ui.q='';ui.f='all';ui.edit=null;ui.cf=null;render();window.scrollTo(0,0)}
+
+function home(){
+ const rs=S.rolls.map(r=>`<div class="card"><div class="row"><div class="grow"><b>${esc(r.name)}</b><div class="mu">${r.members.length} people</div></div><button class="b" data-a="start" data-i="${r.id}">Take register</button><button data-a="roll" data-i="${r.id}">Edit</button></div></div>`).join('');
+ const ss=[...S.sessions].sort((a,b)=>b.start.localeCompare(a.start)).map(s=>`<div class="card"><div class="row"><div class="grow"><b>${esc(s.title)}</b><div class="mu">${esc(s.rollName)} · ${fday(s.start)} · ${cnt(s)}/${s.members.length} present</div></div><span class="chip ${s.status}">${s.status==='open'?'In progress':'Saved'}</span></div><div class="row mt"><button class="b" data-a="sess" data-i="${s.id}">${s.status==='open'?'Resume':'View'}</button><button data-a="pdf" data-i="${s.id}">PDF</button>${cb('delsess',s.id,'Delete')}</div></div>`).join('')||'<p class="mu">No registers yet. Tap “Take register” on a roll.</p>';
+ return `<header><h1>Roll Call</h1>${mem?'<div class="mu">⚠ Storage is blocked here, so data won’t be kept after closing.</div>':''}</header><main>
+ <h2>Rolls</h2>${rs}<button data-a="newroll">+ New roll</button>
+ <h2>Registers</h2>${ss}
+ <h2>Backup</h2><div class="card"><div class="mu">Registers are stored on this device’s browser. Download a backup now and then.</div><div class="row mt"><button data-a="export">Download backup</button><label class="btn">Restore backup<input type="file" accept=".json,application/json" data-restore hidden></label></div></div></main>`}
+
+function sessV(){const s=sess(ui.id),o=s.status==='open';
+ return `<header><div class="row"><button data-a="home">‹ Back</button><div class="grow"></div><span id="cnt" class="cnt"></span></div>
+ <input class="t" data-title value="${esc(s.title)}" ${o?'':'disabled'}>
+ <input class="mt" type="search" data-q placeholder="Search name or unit…" value="${esc(ui.q)}">
+ <div class="row mt">${['all','present','absent'].map(f=>`<button class="${ui.f===f?'b':''}" data-a="filt" data-f="${f}">${f[0].toUpperCase()+f.slice(1)}</button>`).join('')}</div></header>
+ <main><div id="list"></div><div class="row mt">${o?'<button class="b big" data-a="finish">Finish &amp; save PDF</button>':`<button class="b" data-a="pdf" data-i="${s.id}">Download PDF</button><button data-a="reopen">Reopen</button>`}</div></main>`}
+function renderList(){
+ const s=sess(ui.id),o=s.status==='open',q=ui.q.toLowerCase();
+ $('#cnt').textContent=cnt(s)+' / '+s.members.length+' present';
+ $('#list').innerHTML=s.members.filter(m=>(m.name+' '+m.unit+' '+(m.tag||'')).toLowerCase().includes(q)&&(ui.f==='all'||(ui.f==='present')===!!s.marks[m.id])).map(m=>{const on=s.marks[m.id];
+  return `<label class="p ${on?'on':''}"><input type="checkbox" data-m="${m.id}" ${on?'checked':''} ${o?'':'disabled'}><div class="i"><div class="nm">${esc(m.name)}</div><div class="u">${esc(m.unit)}${m.tag?' · '+esc(m.tag):''}${tel(m.phone)}</div>${on?'<div class="t">✓ '+fmt(on)+'</div>':''}</div></label>`}).join('')||'<p class="mu">No one to show.</p>'}
+
+function rollV(){const r=roll(ui.id);
+ return `<header><div class="row"><button data-a="home">‹ Back</button><div class="grow"></div><span class="cnt">${r.members.length} people</span></div>
+ <input class="t" data-rname value="${esc(r.name)}"><input class="mt" type="search" data-q placeholder="Search this roll…" value="${esc(ui.q)}"></header>
+ <main><div class="card"><b>Add a person</b><div class="grid mt"><input id="nn" class="full" placeholder="Full name"><input id="nu" placeholder="Unit / group"><input id="np" placeholder="Phone"><input id="nt" class="full" placeholder="Tag (optional, e.g. Pair 50)"></div><button class="b mt" data-a="addm">Add</button></div>
+ <details class="card"><summary><b>Paste many at once</b></summary><div class="mu mt">One per line: Name, Unit, Phone</div><textarea id="bulk" rows="5" class="mt"></textarea><button class="b mt" data-a="bulk">Add all</button></details>
+ <div id="mlist"></div><div class="row mt">${cb('delroll',r.id,'Delete this roll')}</div><div class="mu mt">Past registers keep their own copy of the names, so editing a roll never changes them.</div></main>`}
+function renderMembers(){
+ const r=roll(ui.id),q=ui.q.toLowerCase();
+ $('#mlist').innerHTML=r.members.filter(m=>(m.name+' '+m.unit+' '+(m.tag||'')).toLowerCase().includes(q)).map(m=>ui.edit===m.id?
+  `<div class="card"><div class="grid"><input id="en" class="full" value="${esc(m.name)}"><input id="eu" value="${esc(m.unit)}"><input id="ep" value="${esc(m.phone)}"><input id="et" class="full" value="${esc(m.tag)}"></div><div class="row mt"><button class="b" data-a="savem" data-i="${m.id}">Save</button><button data-a="cancelm">Cancel</button></div></div>`:
+  `<div class="p"><div class="grow"><div class="nm">${esc(m.name)}</div><div class="u">${esc(m.unit)}${m.tag?' · '+esc(m.tag):''}${tel(m.phone)}</div></div><button data-a="editm" data-i="${m.id}">Edit</button>${cb('delm',m.id,'✕')}</div>`).join('')||'<p class="mu">No one here yet.</p>'}
+
+function render(){const a=$('#app');
+ if(ui.v==='home')a.innerHTML=home();else if(ui.v==='roll'){a.innerHTML=rollV();renderMembers()}else{a.innerHTML=sessV();renderList()}}
+
+async function makePdf(s){
+ let dl=null;try{dl=window.claude&&await claude.use('downloads')}catch(e){}
+ if(!dl){toast('PDF download isn’t available in this view.');return}
+ if(!window.jspdf){toast('PDF tool failed to load. Check your connection.');return}
+ const d=new window.jspdf.jsPDF({unit:'mm',format:'a4'}),L=12,W=186;
+ const cols=[['#',8],['Name',56],['Unit',38],['Phone',44],['Status / time',40]],X=[L];cols.forEach((c,i)=>X.push(X[i]+c[1]));
+ const cut=(t,w)=>{t=String(t||'');if(d.getTextWidth(t)<=w-3)return t;while(t.length>1&&d.getTextWidth(t+'…')>w-3)t=t.slice(0,-1);return t+'…'};
+ const th=y=>{d.setFillColor(17,107,82);d.rect(L,y,W,7,'F');d.setTextColor(255);d.setFont('helvetica','bold');d.setFontSize(9);cols.forEach((c,i)=>d.text(c[0],X[i]+1.5,y+4.8));return y+7};
+ const n=cnt(s);
+ d.setTextColor(17,107,82);d.setFont('helvetica','bold');d.setFontSize(16);d.text(cut(s.title,W),L,18);
+ d.setTextColor(90);d.setFont('helvetica','normal');d.setFontSize(9);
+ d.text('Roll: '+s.rollName,L,25);d.text('Started: '+fmt(s.start,'en-GB')+(s.end?'     Finished: '+fmt(s.end,'en-GB'):'     (in progress)'),L,30);
+ d.setFont('helvetica','bold');d.setTextColor(30);d.text('Present: '+n+'     Absent: '+(s.members.length-n)+'     Total: '+s.members.length,L,36);
+ let y=th(41);
+ s.members.forEach((m,k)=>{
+  if(y>282){d.addPage();y=th(14)}
+  const on=s.marks[m.id];
+  if(on){d.setFillColor(227,243,236);d.rect(L,y,W,6.4,'F')}else if(k%2){d.setFillColor(246,245,240);d.rect(L,y,W,6.4,'F')}
+  d.setFont('helvetica','normal');d.setFontSize(8.5);d.setTextColor(30);
+  d.text(String(k+1),X[0]+1.5,y+4.4);d.text(cut(m.name,56),X[1]+1.5,y+4.4);d.setTextColor(90);
+  d.text(cut(m.unit,38),X[2]+1.5,y+4.4);d.text(cut(m.phone,44),X[3]+1.5,y+4.4);
+  if(on){d.setTextColor(17,107,82);d.text(cut(fmt(on,'en-GB'),40),X[4]+1.5,y+4.4)}else{d.setTextColor(150);d.text('Absent',X[4]+1.5,y+4.4)}
+  y+=6.4});
+ const np=d.getNumberOfPages();
+ for(let p=1;p<=np;p++){d.setPage(p);d.setFont('helvetica','normal');d.setFontSize(8);d.setTextColor(120);d.text('Page '+p+' of '+np,105,291,{align:'center'})}
+ const name=(s.title.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')||'register')+'.pdf';
+ try{await dl.save({filename:name,data:d.output('arraybuffer')});toast('PDF saved')}catch(e){if(!e||e.code!=='declined')toast('Could not save the PDF')}
+}
+
+document.addEventListener('click',async e=>{
+ const t=e.target.closest('[data-a]');if(!t)return;
+ const a=t.dataset.a,i=t.dataset.i;
+ if(a==='ask'){ui.cf=t.dataset.k;render();return}
+ ui.cf=null;
+ if(a==='home')go('home');
+ else if(a==='roll')go('roll',i);
+ else if(a==='sess')go('sess',i);
+ else if(a==='newroll'){const r={id:uid(),name:'New roll',members:[]};S.rolls.push(r);save();go('roll',r.id)}
+ else if(a==='start'){const r=roll(i),now=new Date().toISOString();const s={id:uid(),rollId:r.id,rollName:r.name,title:r.name+' – '+fday(now),start:now,end:null,status:'open',members:r.members.map(m=>({...m})),marks:{}};S.sessions.push(s);save();go('sess',s.id)}
+ else if(a==='pdf')makePdf(sess(i));
+ else if(a==='delsess'){S.sessions=S.sessions.filter(s=>s.id!==i);save();render()}
+ else if(a==='filt'){ui.f=t.dataset.f;render()}
+ else if(a==='finish'){const s=sess(ui.id);s.status='closed';s.end=new Date().toISOString();save();await makePdf(s);go('home')}
+ else if(a==='reopen'){const s=sess(ui.id);s.status='open';s.end=null;save();render()}
+ else if(a==='delroll'){S.rolls=S.rolls.filter(r=>r.id!==i);save();go('home')}
+ else if(a==='addm'){const r=roll(ui.id),n=$('#nn').value.trim();if(!n){toast('Enter a name');return}
+  r.members.push({id:uid(),name:n,unit:$('#nu').value.trim(),phone:$('#np').value.trim(),tag:$('#nt').value.trim()});save();render();toast('Added')}
+ else if(a==='bulk'){const r=roll(ui.id);let c=0;$('#bulk').value.split('\n').forEach(l=>{const f=l.split(/,|\t/).map(x=>x.trim());if(f[0]){r.members.push({id:uid(),name:f[0],unit:f[1]||'',phone:f[2]||'',tag:''});c++}});save();render();toast(c+' added')}
+ else if(a==='editm'){ui.edit=i;renderMembers()}
+ else if(a==='cancelm'){ui.edit=null;renderMembers()}
+ else if(a==='savem'){const m=roll(ui.id).members.find(x=>x.id===i);m.name=$('#en').value.trim()||m.name;m.unit=$('#eu').value.trim();m.phone=$('#ep').value.trim();m.tag=$('#et').value.trim();ui.edit=null;save();renderMembers()}
+ else if(a==='delm'){const r=roll(ui.id);r.members=r.members.filter(m=>m.id!==i);save();render()}
+ else if(a==='export'){let dl=null;try{dl=window.claude&&await claude.use('downloads')}catch(x){}
+  if(!dl){toast('Download isn’t available in this view.');return}
+  try{await dl.save({filename:'rollcall-backup-'+new Date().toISOString().slice(0,10)+'.json',data:JSON.stringify(S)});toast('Backup saved')}catch(x){if(!x||x.code!=='declined')toast('Could not save backup')}}
+});
+document.addEventListener('input',e=>{const t=e.target;if(t.matches('[data-q]')){ui.q=t.value;ui.v==='sess'?renderList():renderMembers()}});
+document.addEventListener('change',e=>{const t=e.target;
+ if(t.dataset.m){const s=sess(ui.id);if(t.checked)s.marks[t.dataset.m]=new Date().toISOString();else delete s.marks[t.dataset.m];save();renderList()}
+ else if(t.matches('[data-title]')){sess(ui.id).title=t.value.trim()||'Register';save()}
+ else if(t.matches('[data-rname]')){roll(ui.id).name=t.value.trim()||'Untitled roll';save()}
+ else if(t.matches('[data-restore]')){const f=t.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const j=JSON.parse(rd.result);let a=0;(j.rolls||[]).forEach(r=>{if(!roll(r.id)){S.rolls.push(r);a++}});(j.sessions||[]).forEach(s=>{if(!sess(s.id)){S.sessions.push(s);a++}});save();render();toast(a+' items restored')}catch(x){toast('That file isn’t a valid backup')}};rd.readAsText(f)}
+});
+render();
+</script></body></html>
