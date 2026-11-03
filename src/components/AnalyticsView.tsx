@@ -14,8 +14,8 @@ import {
   Phone,
   MessageCircle,
 } from 'lucide-react';
-import { Roll, Session } from '../types';
-import { isMemberPresent, formatDateOnly } from '../utils/storage';
+import { Roll, Session, RollField } from '../types';
+import { isMemberPresent, formatDateOnly, getMemberValue, formatGroupDisplay } from '../utils/storage';
 import { exportAttendanceMatrixCSV } from '../utils/exportUtils';
 
 interface AnalyticsViewProps {
@@ -25,9 +25,32 @@ interface AnalyticsViewProps {
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ rolls, sessions }) => {
   const [selectedRollId, setSelectedRollId] = useState<string>(rolls[0]?.id || '');
+  const [selectedGroupingFieldId, setSelectedGroupingFieldId] = useState<string>('');
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
   const currentRoll = rolls.find((r) => r.id === selectedRollId) || rolls[0];
+
+  // Eligible grouping parameters (e.g. department, unit, group, position, status)
+  const groupingFields: RollField[] = useMemo(() => {
+    if (!currentRoll) return [];
+    return (currentRoll.fields || []).filter((f) => !f.isPhoneField && f.type !== 'phone');
+  }, [currentRoll]);
+
+  // Dynamically select field that implies groups/departments
+  const activeGroupingField: RollField | undefined = useMemo(() => {
+    if (!groupingFields.length) return undefined;
+    if (selectedGroupingFieldId) {
+      const match = groupingFields.find((f) => f.id === selectedGroupingFieldId);
+      if (match) return match;
+    }
+    // Prefer explicitly configured group field, or fields named department / unit / group / team / squad
+    const preferred =
+      groupingFields.find((f) => f.id === currentRoll?.groupFieldId) ||
+      groupingFields.find((f) => f.isGroupField) ||
+      groupingFields.find((f) => /department|unit|group|team|squad|class|portfolio|position|wing/i.test(f.name)) ||
+      groupingFields[0];
+    return preferred;
+  }, [groupingFields, selectedGroupingFieldId, currentRoll]);
 
   // Sessions belonging to current roll
   const rollSessions = useMemo(() => {
@@ -70,15 +93,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ rolls, sessions })
       .sort((a, b) => b.rate - a.rate || b.attended - a.attended);
   }, [currentRoll, rollSessions]);
 
-  // Unit performance aggregated across sessions
-  const unitStats = useMemo(() => {
-    if (!currentRoll || rollSessions.length === 0) return [];
+  // Dynamic Group / Department performance aggregated across sessions
+  const groupStats = useMemo(() => {
+    if (!currentRoll || rollSessions.length === 0 || !activeGroupingField) return [];
 
-    const map = new Map<string, { totalPossible: number; totalAttended: number }>();
+    const map = new Map<string, { totalPossible: number; totalAttended: number; memberCount: number }>();
 
     currentRoll.members.forEach((m) => {
-      const unit = m.unit || 'General';
-      const entry = map.get(unit) || { totalPossible: 0, totalAttended: 0 };
+      const rawVal = getMemberValue(m, activeGroupingField.id) || (m as any)[activeGroupingField.id] || 'General';
+      const displayVal = formatGroupDisplay(rawVal, activeGroupingField);
+
+      const entry = map.get(displayVal) || { totalPossible: 0, totalAttended: 0, memberCount: 0 };
+      entry.memberCount += 1;
       entry.totalPossible += rollSessions.length;
 
       rollSessions.forEach((s) => {
@@ -87,18 +113,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ rolls, sessions })
         }
       });
 
-      map.set(unit, entry);
+      map.set(displayVal, entry);
     });
 
     return Array.from(map.entries())
-      .map(([unit, data]) => ({
-        unit,
+      .map(([groupName, data]) => ({
+        groupName,
+        memberCount: data.memberCount,
         attended: data.totalAttended,
         possible: data.totalPossible,
         rate: data.totalPossible > 0 ? (data.totalAttended / data.totalPossible) * 100 : 0,
       }))
-      .sort((a, b) => b.rate - a.rate);
-  }, [currentRoll, rollSessions]);
+      .sort((a, b) => b.rate - a.rate || b.attended - a.attended);
+  }, [currentRoll, rollSessions, activeGroupingField]);
 
   // Overall attendance rate
   const overallTurnout = useMemo(() => {
@@ -219,46 +246,78 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ rolls, sessions })
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Department / Unit Ranking Table */}
+          {/* Dynamic Group / Department Aggregate Attendance */}
           <div className="rounded-2xl border border-[#e3e1d8] bg-white p-5 shadow-sm dark:border-[#2b3731] dark:bg-[#1b2420]">
-            <div className="flex items-center gap-2">
-              <Building className="h-4 w-4 text-[#116b52] dark:text-[#3fbf95]" />
-              <h2 className="font-bold text-base text-[#1d2b25] dark:text-[#e8efe9]">
-                Unit / Department Aggregate Attendance
-              </h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e3e1d8] pb-3 dark:border-[#2b3731]">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Building className="h-4 w-4 text-[#116b52] dark:text-[#3fbf95]" />
+                  <h2 className="font-bold text-base text-[#1d2b25] dark:text-[#e8efe9]">
+                    {activeGroupingField ? `${activeGroupingField.name} Aggregate Attendance` : 'Group Aggregate Attendance'}
+                  </h2>
+                </div>
+                <p className="mt-0.5 text-xs text-[#6b7770] dark:text-[#92a199]">
+                  Cumulative attendance breakdown across all recorded sessions
+                </p>
+              </div>
+
+              {groupingFields.length > 1 && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="font-medium text-[#6b7770] dark:text-[#92a199]">Group by parameter:</span>
+                  <select
+                    value={activeGroupingField?.id || ''}
+                    onChange={(e) => setSelectedGroupingFieldId(e.target.value)}
+                    className="rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] px-2.5 py-1 text-xs font-semibold text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                  >
+                    {groupingFields.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-            <p className="mt-0.5 text-xs text-[#6b7770] dark:text-[#92a199]">
-              Cumulative attendance rate across all recorded sessions
-            </p>
 
             <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {unitStats.map((item) => (
-                <div
-                  key={item.unit}
-                  className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-3 dark:border-[#2b3731] dark:bg-[#121816]"
-                >
-                  <div className="flex items-center justify-between text-xs font-medium">
-                    <span className="font-semibold text-[#1d2b25] dark:text-[#e8efe9]">
-                      {item.unit}
-                    </span>
-                    <span className="text-[#6b7770] dark:text-[#92a199]">
-                      {item.attended}/{item.possible} ({item.rate.toFixed(0)}%)
-                    </span>
-                  </div>
-                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-[#e3e1d8] dark:bg-[#2b3731]">
-                    <div
-                      className={`h-full rounded-full ${
-                        item.rate >= 80
-                          ? 'bg-emerald-600'
-                          : item.rate >= 50
-                          ? 'bg-amber-500'
-                          : 'bg-rose-500'
-                      }`}
-                      style={{ width: `${item.rate}%` }}
-                    />
-                  </div>
+              {groupStats.length === 0 ? (
+                <div className="col-span-2 py-4 text-center text-xs text-[#6b7770]">
+                  No group data found for this parameter.
                 </div>
-              ))}
+              ) : (
+                groupStats.map((item) => (
+                  <div
+                    key={item.groupName}
+                    className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-3 dark:border-[#2b3731] dark:bg-[#121816]"
+                  >
+                    <div className="flex items-center justify-between text-xs font-medium">
+                      <div className="flex items-center gap-1.5 truncate pr-2">
+                        <span className="font-semibold text-[#1d2b25] dark:text-[#e8efe9] truncate">
+                          {item.groupName}
+                        </span>
+                        <span className="text-[11px] text-[#6b7770] dark:text-[#92a199] shrink-0">
+                          ({item.memberCount} {item.memberCount === 1 ? 'person' : 'people'})
+                        </span>
+                      </div>
+                      <span className="font-bold text-[#1d2b25] dark:text-[#e8efe9] shrink-0">
+                        {item.attended}/{item.possible} ({item.rate.toFixed(0)}%)
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#e3e1d8] dark:bg-[#2b3731]">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          item.rate >= 80
+                            ? 'bg-emerald-600'
+                            : item.rate >= 50
+                            ? 'bg-amber-500'
+                            : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${item.rate}%` }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -285,29 +344,36 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ rolls, sessions })
                 <thead>
                   <tr className="border-b border-[#e3e1d8] text-[#6b7770] dark:border-[#2b3731] dark:text-[#92a199]">
                     <th className="py-2 pr-3 font-semibold">Attendee</th>
-                    <th className="py-2 px-3 font-semibold">Unit / Group</th>
+                    <th className="py-2 px-3 font-semibold">
+                      {activeGroupingField ? activeGroupingField.name : 'Group'}
+                    </th>
                     <th className="py-2 px-3 text-center font-semibold">Present</th>
                     <th className="py-2 px-3 text-center font-semibold">Rate</th>
                     <th className="py-2 pl-3 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e3e1d8]/60 dark:divide-[#2b3731]/60">
-                  {memberStats.map(({ member, attended, totalPossible, rate }) => (
-                    <tr key={member.id} className="hover:bg-stone-50/50 dark:hover:bg-stone-800/30">
-                      <td className="py-2.5 pr-3 font-medium text-[#1d2b25] dark:text-[#e8efe9]">
-                        <div>{member.name}</div>
-                        {member.tag && (
-                          <div className="text-[10px] text-[#6b7770] dark:text-[#92a199]">
-                            {member.tag}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-[#6b7770] dark:text-[#92a199]">
-                        {member.unit}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-bold text-[#1d2b25] dark:text-[#e8efe9]">
-                        {attended} / {totalPossible}
-                      </td>
+                  {memberStats.map(({ member, attended, totalPossible, rate }) => {
+                    const groupVal = activeGroupingField
+                      ? getMemberValue(member, activeGroupingField.id) || (member as any)[activeGroupingField.id] || ''
+                      : member.unit || '';
+
+                    return (
+                      <tr key={member.id} className="hover:bg-stone-50/50 dark:hover:bg-stone-800/30">
+                        <td className="py-2.5 pr-3 font-medium text-[#1d2b25] dark:text-[#e8efe9]">
+                          <div>{member.name}</div>
+                          {member.tag && member.tag !== groupVal && (
+                            <div className="text-[10px] text-[#6b7770] dark:text-[#92a199]">
+                              {member.tag}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-[#6b7770] dark:text-[#92a199]">
+                          {formatGroupDisplay(groupVal, activeGroupingField) || 'General'}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold text-[#1d2b25] dark:text-[#e8efe9]">
+                          {attended} / {totalPossible}
+                        </td>
                       <td className="py-2.5 px-3 text-center">
                         <span
                           className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
@@ -344,8 +410,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ rolls, sessions })
                         )}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
+                  );
+                })}
+              </tbody>
               </table>
             </div>
           </div>

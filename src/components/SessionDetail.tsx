@@ -261,11 +261,11 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
         </div>
       )}
 
-      {/* Export Center (Addresses User Request: "export the log file (i don't know which format is best) to local storage") */}
-      <div className="mb-6 rounded-2xl border border-[#116b52]/30 bg-white p-5 shadow-sm dark:border-[#3fbf95]/30 dark:bg-[#1b2420]">
+      {/* Export Center */}
+      <div className="mb-6 rounded-2xl border border-[var(--theme-primary)]/40 bg-white p-5 shadow-sm dark:border-[var(--theme-primary)]/40 dark:bg-[#1b2420]">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="font-bold text-base text-[#116b52] dark:text-[#3fbf95]">
+            <h2 className="font-bold text-base text-[var(--theme-primary)]">
               Local File Export Center
             </h2>
             <p className="mt-0.5 text-xs text-[#6b7770] dark:text-[#92a199]">
@@ -291,9 +291,10 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
             </div>
             <button
               onClick={() => handleExport('csv')}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#116b52] py-2 text-xs font-semibold text-white shadow-2xs hover:bg-[#0e5742] active:scale-95 dark:bg-[#3fbf95] dark:text-[#0b1410]"
+              style={{ backgroundColor: '#059669' }}
+              className="no-theme-override mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-2xs hover:brightness-95 active:scale-95 transition"
             >
-              <Download className="h-3.5 w-3.5" />
+              <Download className="h-3.5 w-3.5 text-white" />
               <span>Download CSV</span>
             </button>
           </div>
@@ -375,7 +376,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
         {/* Arrival Timeline Histogram */}
         <div className="rounded-2xl border border-[#e3e1d8] bg-white p-5 shadow-sm dark:border-[#2b3731] dark:bg-[#1b2420]">
           <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-[#116b52] dark:text-[#3fbf95]" />
+            <Clock className="h-4 w-4 text-[var(--theme-primary)]" />
             <h3 className="font-bold text-sm text-[#1d2b25] dark:text-[#e8efe9]">
               Check-In Timeline Distribution
             </h3>
@@ -397,9 +398,9 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
                     <span className="w-12 font-mono font-medium text-[#6b7770] dark:text-[#92a199]">
                       {item.timeLabel}
                     </span>
-                    <div className="h-4 flex-1 overflow-hidden rounded-md bg-[#e3e1d8] dark:bg-[#2b3731]">
+                    <div className="h-4 flex-1 overflow-hidden rounded-md bg-[var(--theme-primary-light)]">
                       <div
-                        className="h-full bg-[#116b52] transition-all dark:bg-[#3fbf95]"
+                        className="h-full bg-[var(--theme-primary)] transition-all"
                         style={{ width: `${barWidth}%` }}
                       />
                     </div>
@@ -416,7 +417,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
         {/* Unit / Department Performance */}
         <div className="rounded-2xl border border-[#e3e1d8] bg-white p-5 shadow-sm dark:border-[#2b3731] dark:bg-[#1b2420]">
           <div className="flex items-center gap-2">
-            <Building className="h-4 w-4 text-[#116b52] dark:text-[#3fbf95]" />
+            <Building className="h-4 w-4 text-[var(--theme-primary)]" />
             <h3 className="font-bold text-sm text-[#1d2b25] dark:text-[#e8efe9]">
               Turnout by Unit / Department
             </h3>
@@ -467,7 +468,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
           </div>
           <button
             onClick={() => handleExport('pdf')}
-            className="flex items-center gap-1.5 rounded-xl bg-[#116b52] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#0e5742] dark:bg-[#3fbf95] dark:text-[#0b1410]"
+            className="flex items-center gap-1.5 rounded-xl bg-[var(--theme-primary)] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition"
           >
             <FileCheck className="h-4 w-4" />
             <span>Download Matching PDF</span>
@@ -477,7 +478,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
         <div className="mt-4 overflow-x-auto rounded-xl border border-[#e3e1d8] dark:border-[#2b3731]">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-[#116b52] text-white">
+              <tr className="bg-[var(--theme-primary)] text-white">
                 <th className="py-2.5 px-3 font-bold w-12">#</th>
                 <th className="py-2.5 px-3 font-bold">Name</th>
                 <th className="py-2.5 px-3 font-bold">Unit</th>
@@ -496,7 +497,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
                     key={m.id}
                     className={`transition-colors ${
                       isPresent
-                        ? 'bg-[#e3f3ec]/90 dark:bg-[#1e3a2f]/70'
+                        ? 'bg-[var(--theme-primary-light)] text-[var(--app-tx)]'
                         : 'bg-white dark:bg-[#1b2420]'
                     }`}
                   >
@@ -506,7 +507,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
                     <td className="py-2.5 px-3 font-semibold text-[#1d2b25] dark:text-[#e8efe9]">
                       {m.name}
                       {m.tag && (
-                        <span className="ml-1.5 rounded bg-[#e3e1d8] px-1.5 py-0.2 text-[10px] font-normal text-[#6b7770] dark:bg-[#2b3731] dark:text-[#92a199]">
+                        <span className="ml-1.5 rounded bg-[var(--app-card-subtle)] px-1.5 py-0.2 text-[10px] font-normal text-[#6b7770] dark:text-[#92a199]">
                           {m.tag}
                         </span>
                       )}
@@ -519,7 +520,7 @@ export const SessionDetail: React.FC<SessionDetailProps> = ({
                     </td>
                     <td className="py-2.5 px-3 font-medium">
                       {isPresent && ts ? (
-                        <span className="text-[#116b52] dark:text-[#3fbf95] font-semibold">
+                        <span className="text-[var(--theme-primary)] font-semibold">
                           {formatDateOnly(ts)}, {formatTimeOnly(ts)}
                         </span>
                       ) : (

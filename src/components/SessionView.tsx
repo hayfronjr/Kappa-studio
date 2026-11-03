@@ -35,8 +35,11 @@ import {
   isMemberPresent,
   getPhoneValue,
   getGroupValue,
+  formatGroupDisplay,
   buildWhatsAppLink,
   loadSettings,
+  isMemberTagActive,
+  getMemberDisplayValues,
 } from '../utils/storage';
 import {
   playCheckSound,
@@ -122,11 +125,13 @@ export const SessionView: React.FC<SessionViewProps> = ({
     });
   }, [session, query, statusFilter, selectedUnit]);
 
-  // Group members by custom group/pair or unit
+  // Group members by custom group parameter or unit
   const groupedMembers = useMemo(() => {
     const groups: Record<string, Member[]> = {};
+    const groupField = session.fields?.find((f) => f.isGroupField);
     filteredMembers.forEach((m) => {
-      const grp = getGroupValue(m, session.fields) || m.unit || 'Ungrouped';
+      const rawGrp = getGroupValue(m, session.fields) || m.unit || 'Ungrouped';
+      const grp = formatGroupDisplay(rawGrp, groupField);
       if (!groups[grp]) groups[grp] = [];
       groups[grp].push(m);
     });
@@ -305,11 +310,11 @@ export const SessionView: React.FC<SessionViewProps> = ({
                   onChange={(e) => setTitleInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
                   autoFocus
-                  className="w-full rounded-lg border border-[#116b52] bg-white px-2.5 py-1 text-sm font-bold text-[#1d2b25] outline-hidden dark:bg-[#1b2420] dark:text-[#e8efe9]"
+                  className="w-full rounded-lg border border-[var(--theme-primary)] bg-white px-2.5 py-1 text-sm font-bold text-[#1d2b25] outline-hidden dark:bg-[#1b2420] dark:text-[#e8efe9]"
                 />
                 <button
                   onClick={handleSaveTitle}
-                  className="rounded-lg bg-[#116b52] px-2.5 py-1 text-xs font-semibold text-white dark:bg-[#3fbf95] dark:text-[#0b1410]"
+                  className="rounded-lg bg-[var(--theme-primary)] px-2.5 py-1 text-xs font-semibold text-white hover:opacity-90 transition"
                 >
                   Save
                 </button>
@@ -333,7 +338,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 {formatTimeOnly(session.start)}
               </span>
               {session.status === 'open' ? (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.2 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                <span className="rounded-full bg-[var(--theme-primary-light)] px-2 py-0.2 text-[10px] font-semibold text-[var(--theme-primary)]">
                   Live Roll Call
                 </span>
               ) : (
@@ -351,7 +356,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
               title={soundEnabled ? 'Audio feedback ON' : 'Audio feedback OFF'}
               className={`rounded-lg p-1.5 transition ${
                 soundEnabled
-                  ? 'text-[#116b52] dark:text-[#3fbf95]'
+                  ? 'text-[var(--theme-primary)]'
                   : 'text-[#6b7770] opacity-40 dark:text-[#92a199]'
               }`}
             >
@@ -362,7 +367,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
               title={hapticsEnabled ? 'Haptic vibration ON' : 'Haptic vibration OFF'}
               className={`rounded-lg p-1.5 transition ${
                 hapticsEnabled
-                  ? 'text-[#116b52] dark:text-[#3fbf95]'
+                  ? 'text-[var(--theme-primary)]'
                   : 'text-[#6b7770] opacity-40 dark:text-[#92a199]'
               }`}
             >
@@ -374,7 +379,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
         {/* Live Attendance Metrics Bar */}
         <div className="mt-3">
           <div className="flex items-center justify-between text-xs font-semibold mb-1">
-            <span className="text-[#116b52] dark:text-[#3fbf95]">
+            <span className="text-[var(--theme-primary)] font-bold">
               {presentCount} of {totalCount} Present ({percentage}%)
             </span>
             <div className="flex items-center gap-2 text-[11px] text-[#6b7770] dark:text-[#92a199]">
@@ -382,10 +387,10 @@ export const SessionView: React.FC<SessionViewProps> = ({
               <span className="text-rose-600 dark:text-rose-400">{absentCount} Absent</span>
             </div>
           </div>
-          {/* Progress Bar */}
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#e3e1d8] dark:bg-[#2b3731]">
+          {/* Progress Bar with theme-colored empty space and fill */}
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--theme-primary-light)]">
             <div
-              className="h-full bg-gradient-to-r from-[#116b52] to-[#3fbf95] transition-all duration-300 ease-out"
+              className="h-full bg-[var(--theme-primary)] transition-all duration-300 ease-out"
               style={{ width: `${percentage}%` }}
             />
           </div>
@@ -401,7 +406,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
               placeholder="Search name, unit, pair, or phone..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-xl border border-[#e3e1d8] bg-white py-2 pl-9 pr-3 text-xs text-[#1d2b25] shadow-2xs outline-hidden placeholder:text-[#6b7770] focus:border-[#116b52] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9] dark:placeholder:text-[#92a199]"
+              className="w-full rounded-xl border border-[#e3e1d8] bg-white py-2 pl-9 pr-3 text-xs text-[#1d2b25] shadow-2xs outline-hidden placeholder:text-[#6b7770] focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9] dark:placeholder:text-[#92a199]"
             />
           </div>
 
@@ -411,7 +416,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
               value={selectedUnit}
               onChange={(e) => setSelectedUnit(e.target.value)}
               aria-label="Filter by department or unit"
-              className="w-full rounded-xl border border-[#e3e1d8] bg-white px-2.5 py-2 text-xs font-medium text-[#1d2b25] shadow-2xs outline-hidden focus:border-[#116b52] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+              className="w-full rounded-xl border border-[#e3e1d8] bg-white px-2.5 py-2 text-xs font-medium text-[#1d2b25] shadow-2xs outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
             >
               <option value="all">All Units ({uniqueUnits.length})</option>
               {uniqueUnits.map((u) => (
@@ -442,7 +447,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                   onClick={() => setStatusFilter(f)}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold capitalize transition ${
                     active
-                      ? 'bg-[#116b52] text-white shadow-2xs dark:bg-[#3fbf95] dark:text-[#0b1410]'
+                      ? 'bg-[var(--theme-primary)] text-white shadow-2xs'
                       : 'border border-[#e3e1d8] bg-white text-[#6b7770] hover:bg-[#eae8df] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#92a199]'
                   }`}
                 >
@@ -460,7 +465,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 onClick={() => setViewMode('list')}
                 className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${
                   viewMode === 'list'
-                    ? 'bg-[#116b52] text-white shadow-2xs dark:bg-[#3fbf95] dark:text-[#0b1410]'
+                    ? 'bg-[var(--theme-primary)] text-white shadow-2xs'
                     : 'text-[#6b7770] hover:text-[#1d2b25] dark:text-[#92a199]'
                 }`}
                 title="List View"
@@ -473,7 +478,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 onClick={() => setViewMode('group')}
                 className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${
                   viewMode === 'group'
-                    ? 'bg-[#116b52] text-white shadow-2xs dark:bg-[#3fbf95] dark:text-[#0b1410]'
+                    ? 'bg-[var(--theme-primary)] text-white shadow-2xs'
                     : 'text-[#6b7770] hover:text-[#1d2b25] dark:text-[#92a199]'
                 }`}
                 title="Pair & Group Cards View"
@@ -489,7 +494,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 <button
                   onClick={markVisiblePresent}
                   title="Mark all shown attendees as present"
-                  className="flex items-center gap-1 rounded-lg border border-[#e3e1d8] bg-white px-2 py-1 text-[11px] font-medium text-[#116b52] hover:bg-[#e3f3ec] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#3fbf95]"
+                  className="flex items-center gap-1 rounded-lg border border-[#e3e1d8] bg-white px-2 py-1 text-[11px] font-medium text-[var(--theme-primary)] hover:bg-[var(--theme-primary-light)] dark:border-[#2b3731] dark:bg-[#1b2420]"
                 >
                   <CheckSquare className="h-3 w-3" />
                   <span>Mark All</span>
@@ -555,7 +560,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                   }
                   setRandomAttendee(null);
                 }}
-                className="rounded-lg bg-[#116b52] px-3 py-1.5 text-xs font-semibold text-white shadow-xs dark:bg-[#3fbf95] dark:text-[#0b1410]"
+                className="rounded-lg bg-[var(--theme-primary)] hover:bg-[var(--theme-primary-hover)] px-3 py-1.5 text-xs font-semibold text-white shadow-xs"
               >
                 Mark Present
               </button>
@@ -583,7 +588,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 setStatusFilter('all');
                 setSelectedUnit('all');
               }}
-              className="mt-3 text-xs font-semibold text-[#116b52] underline dark:text-[#3fbf95]"
+              className="mt-3 text-xs font-semibold text-[var(--theme-primary)] underline hover:opacity-80"
             >
               Reset Filters
             </button>
@@ -601,7 +606,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                   key={grpName}
                   className={`rounded-2xl border p-3.5 transition-all shadow-xs ${
                     allPresent
-                      ? 'border-[#116b52]/40 bg-[#e3f3ec]/50 dark:border-[#3fbf95]/40 dark:bg-[#1e3a2f]/40'
+                      ? 'border-[var(--theme-primary)]/40 bg-[var(--theme-primary-light)]'
                       : somePresent
                       ? 'border-amber-400/40 bg-amber-50/30 dark:border-amber-600/40 dark:bg-amber-950/20'
                       : 'border-[#e3e1d8] bg-white dark:border-[#2b3731] dark:bg-[#1b2420]'
@@ -610,7 +615,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                   {/* Group Card Header */}
                   <div className="flex items-center justify-between border-b border-[#e3e1d8]/80 pb-2.5 mb-2.5 dark:border-[#2b3731]/80">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <Users className="h-4 w-4 shrink-0 text-[#116b52] dark:text-[#3fbf95]" />
+                      <Users className="h-4 w-4 shrink-0 text-[var(--theme-primary)]" />
                       <span className="truncate font-bold text-sm text-[#1d2b25] dark:text-[#e8efe9]">
                         {grpName}
                       </span>
@@ -625,7 +630,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                           type="button"
                           onClick={() => markGroupPresent(groupMemberList)}
                           title="Mark entire pair/group present"
-                          className="rounded-lg bg-[#116b52]/10 px-2 py-1 text-[11px] font-bold text-[#116b52] hover:bg-[#116b52]/20 dark:bg-[#3fbf95]/15 dark:text-[#3fbf95]"
+                          className="rounded-lg bg-[var(--theme-primary)]/15 px-2 py-1 text-[11px] font-bold text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/25"
                         >
                           ✓ Mark All
                         </button>
@@ -650,13 +655,14 @@ export const SessionView: React.FC<SessionViewProps> = ({
                       const status = getMarkStatus(mark);
                       const phone = getPhoneValue(member, session.fields);
                       const whatsappUrl = phone ? buildWhatsAppLink(phone, settings.whatsappCountryCode) : null;
+                      const displayValues = getMemberDisplayValues(member, session.fields);
 
                       return (
                         <div
                           key={member.id}
                           className={`flex items-center justify-between gap-2 rounded-xl border p-2 transition ${
                             isPresent
-                              ? 'border-[#116b52]/30 bg-[#e3f3ec]/70 dark:border-[#3fbf95]/30 dark:bg-[#1e3a2f]/60'
+                              ? 'border-[var(--theme-primary)]/40 bg-[var(--theme-primary-light)]'
                               : 'border-[#e3e1d8]/70 bg-[#faf9f5] dark:border-[#2b3731]/70 dark:bg-[#151c19]'
                           }`}
                         >
@@ -672,17 +678,19 @@ export const SessionView: React.FC<SessionViewProps> = ({
                               disabled={!isOngoing}
                               onChange={() => toggleAttendance(member.id)}
                               aria-label={`Mark attendance for ${member.name}`}
-                              className="h-5 w-5 shrink-0 rounded-md accent-[#116b52] cursor-pointer dark:accent-[#3fbf95]"
+                              className="h-5 w-5 shrink-0 rounded-md accent-[var(--theme-primary)] cursor-pointer"
                             />
                             <div className="min-w-0 flex-1">
                               <div className="truncate font-semibold text-xs sm:text-sm text-[#1d2b25] dark:text-[#e8efe9]">
                                 {member.name}
                               </div>
-                              <div className="flex items-center gap-1.5 text-[10px] text-[#6b7770] dark:text-[#92a199]">
-                                <span className="truncate">{member.unit}</span>
+                              <div className="flex items-center gap-1.5 text-[10px] text-[#6b7770] dark:text-[#92a199] truncate">
+                                {displayValues.length > 0 && (
+                                  <span className="truncate">{displayValues.join(' • ')}</span>
+                                )}
                                 {isPresent && timestamp && (
-                                  <span className="text-[#116b52] font-semibold dark:text-[#3fbf95]">
-                                    • {formatTimeOnly(timestamp)}
+                                  <span className="text-[var(--theme-primary)] font-semibold shrink-0">
+                                    {displayValues.length > 0 ? ' • ' : ''}{formatTimeOnly(timestamp)}
                                   </span>
                                 )}
                               </div>
@@ -737,8 +745,8 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 key={member.id}
                 className={`group relative flex flex-col gap-2 rounded-xl border p-3 transition-all sm:flex-row sm:items-center sm:justify-between ${
                   isPresent
-                    ? 'border-[#116b52]/30 bg-[#e3f3ec]/60 dark:border-[#3fbf95]/30 dark:bg-[#1e3a2f]/50'
-                    : 'border-[#e3e1d8] bg-white hover:border-[#116b52]/40 dark:border-[#2b3731] dark:bg-[#1b2420] dark:hover:border-[#3fbf95]/40'
+                    ? 'border-[var(--theme-primary)]/40 bg-[var(--theme-primary-light)]'
+                    : 'border-[#e3e1d8] bg-white hover:border-[var(--theme-primary)]/40 dark:border-[#2b3731] dark:bg-[#1b2420] dark:hover:border-[var(--theme-primary)]/40'
                 }`}
               >
                 {/* Left checkable row */}
@@ -756,7 +764,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                       disabled={!isOngoing}
                       onChange={() => toggleAttendance(member.id)}
                       aria-label={`Mark attendance for ${member.name}`}
-                      className="h-6 w-6 cursor-pointer rounded-md accent-[#116b52] transition-transform active:scale-90 dark:accent-[#3fbf95]"
+                      className="h-6 w-6 cursor-pointer rounded-md accent-[var(--theme-primary)] transition-transform active:scale-90"
                     />
                   </div>
 
@@ -766,14 +774,17 @@ export const SessionView: React.FC<SessionViewProps> = ({
                       <span className="font-semibold text-sm sm:text-base text-[#1d2b25] dark:text-[#e8efe9]">
                         {member.name}
                       </span>
-                      {group && (
-                        <span className="rounded-full bg-[#116b52]/10 px-2 py-0.5 text-[10px] font-bold text-[#116b52] dark:bg-[#3fbf95]/15 dark:text-[#3fbf95]">
-                          {group}
-                        </span>
-                      )}
-                      {member.tag && (
-                        <span className="rounded-full bg-[#e3e1d8] px-2 py-0.5 text-[10px] font-bold text-[#1d2b25] dark:bg-[#2b3731] dark:text-[#e8efe9]">
-                          {member.tag}
+                      {/* Active Tag next to name */}
+                      {isMemberTagActive(member.memberTag) && member.memberTag && (
+                        <span
+                          className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold shadow-2xs"
+                          style={{
+                            color: member.memberTag.color,
+                            backgroundColor: `${member.memberTag.color}18`,
+                            border: `1px solid ${member.memberTag.color}40`,
+                          }}
+                        >
+                          {member.memberTag.text}
                         </span>
                       )}
                       {status === 'late' && (
@@ -783,19 +794,20 @@ export const SessionView: React.FC<SessionViewProps> = ({
                       )}
                     </div>
 
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[#6b7770] dark:text-[#92a199]">
-                      <span className="font-medium">{member.unit}</span>
-                      {phone && (
-                        <>
-                          <span>•</span>
-                          <span className="font-mono text-[11px]">{phone}</span>
-                        </>
-                      )}
-                    </div>
+                    {/* Parameters displayed under name: values only, joined with centered dot */}
+                    {(() => {
+                      const displayValues = getMemberDisplayValues(member, session.fields);
+                      if (displayValues.length === 0) return null;
+                      return (
+                        <div className="mt-0.5 text-xs text-[#6b7770] dark:text-[#92a199]">
+                          {displayValues.join(' • ')}
+                        </div>
+                      );
+                    })()}
 
                     {/* Timestamp & Notes Badge */}
                     {isPresent && timestamp && (
-                      <div className="mt-1 flex items-center gap-2 text-[11px] font-medium text-[#116b52] dark:text-[#3fbf95]">
+                      <div className="mt-1 flex items-center gap-2 text-[11px] font-medium text-[var(--theme-primary)]">
                         <span>✓ {formatDateTime(timestamp)}</span>
                         {markDetail?.note && (
                           <span className="text-[#6b7770] dark:text-[#92a199]">
@@ -885,7 +897,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                           setMemberStatus(member.id, isPresent ? (status as any) : 'present', noteInput);
                           setActiveNoteMemberId(null);
                         }}
-                        className="rounded-lg bg-[#116b52] px-2.5 py-1 text-xs font-semibold text-white dark:bg-[#3fbf95] dark:text-[#0b1410]"
+                        className="rounded-lg bg-[var(--theme-primary)] hover:bg-[var(--theme-primary-hover)] px-2.5 py-1 text-xs font-semibold text-white"
                       >
                         Save Note
                       </button>
@@ -908,7 +920,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#e3e1d8] bg-[#f6f5f0]/95 p-3 backdrop-blur-md dark:border-[#2b3731] dark:bg-[#121816]/95">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-sm text-[#116b52] dark:text-[#3fbf95]">
+            <span className="font-bold text-sm text-[var(--theme-primary)]">
               {presentCount} / {totalCount}
             </span>
             <span className="text-xs text-[#6b7770] dark:text-[#92a199]">
@@ -923,7 +935,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                 onClick={() => setShowExportMenu(!showExportMenu)}
                 className="flex items-center gap-1.5 rounded-xl border border-[#e3e1d8] bg-white px-3 py-2 text-xs font-semibold text-[#1d2b25] shadow-xs transition hover:bg-[#eae8df] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
               >
-                <Download className="h-4 w-4 text-[#116b52] dark:text-[#3fbf95]" />
+                <Download className="h-4 w-4 text-[var(--theme-primary)]" />
                 <span className="hidden sm:inline">Export Log</span>
                 <ChevronDown className="h-3.5 w-3.5 text-[#6b7770]" />
               </button>
@@ -938,7 +950,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                       exportSessionToCSV(session);
                       setShowExportMenu(false);
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[#1d2b25] hover:bg-[#e3f3ec] dark:text-[#e8efe9] dark:hover:bg-[#1e3a2f]"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[#1d2b25] hover:bg-[var(--theme-primary-light)] dark:text-[#e8efe9]"
                   >
                     <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
                     <div className="text-left">
@@ -952,7 +964,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                       exportSessionToPDF(session);
                       setShowExportMenu(false);
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[#1d2b25] hover:bg-[#e3f3ec] dark:text-[#e8efe9] dark:hover:bg-[#1e3a2f]"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[#1d2b25] hover:bg-[var(--theme-primary-light)] dark:text-[#e8efe9]"
                   >
                     <FileCheck className="h-4 w-4 text-rose-600" />
                     <div className="text-left">
@@ -966,7 +978,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
                       exportAuditLogText(session);
                       setShowExportMenu(false);
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[#1d2b25] hover:bg-[#e3f3ec] dark:text-[#e8efe9] dark:hover:bg-[#1e3a2f]"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[#1d2b25] hover:bg-[var(--theme-primary-light)] dark:text-[#e8efe9]"
                   >
                     <FileText className="h-4 w-4 text-blue-600" />
                     <div className="text-left">
@@ -982,7 +994,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
             {isOngoing ? (
               <button
                 onClick={handleFinish}
-                className="flex items-center gap-2 rounded-xl bg-[#116b52] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-md transition hover:bg-[#0e5742] active:scale-95 dark:bg-[#3fbf95] dark:text-[#0b1410] dark:hover:bg-[#35a882]"
+                className="flex items-center gap-2 rounded-xl bg-[var(--theme-primary)] hover:bg-[var(--theme-primary-hover)] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-md transition active:scale-95"
               >
                 <UserCheck className="h-4 w-4" />
                 <span>Finish &amp; Close Register</span>
@@ -990,7 +1002,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
             ) : (
               <button
                 onClick={() => onViewDetails(session)}
-                className="flex items-center gap-2 rounded-xl bg-[#116b52] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-md transition hover:bg-[#0e5742] dark:bg-[#3fbf95] dark:text-[#0b1410]"
+                className="flex items-center gap-2 rounded-xl bg-[var(--theme-primary)] hover:bg-[var(--theme-primary-hover)] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-md transition"
               >
                 <span>View Full Analysis</span>
               </button>

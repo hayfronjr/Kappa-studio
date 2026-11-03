@@ -5,9 +5,6 @@ import {
   Moon,
   Sun,
   Monitor,
-  Type,
-  MessageCircle,
-  Phone,
   HardDrive,
   Download,
   Upload,
@@ -15,8 +12,7 @@ import {
   Trash2,
   ShieldCheck,
   CheckCircle2,
-  Sparkles,
-  HelpCircle,
+  MessageCircle,
 } from 'lucide-react';
 import { AppSettings, AppState, ThemeColor, AppFont } from '../types';
 import { exportDatabaseBackup } from '../utils/exportUtils';
@@ -32,20 +28,22 @@ interface SettingsViewProps {
   setStoragePersisted: (val: boolean) => void;
 }
 
-const THEME_OPTIONS: { id: ThemeColor; name: string; hex: string; bgClass: string }[] = [
-  { id: 'green', name: 'Forest Green (Default)', hex: '#116b52', bgClass: 'bg-[#116b52]' },
-  { id: 'blue', name: 'Ocean Blue', hex: '#2563eb', bgClass: 'bg-blue-600' },
-  { id: 'purple', name: 'Royal Purple', hex: '#7c3aed', bgClass: 'bg-purple-600' },
-  { id: 'rose', name: 'Crimson Rose', hex: '#e11d48', bgClass: 'bg-rose-600' },
-  { id: 'amber', name: 'Warm Amber', hex: '#d97706', bgClass: 'bg-amber-600' },
-  { id: 'slate', name: 'Tech Slate', hex: '#475569', bgClass: 'bg-slate-600' },
+const THEME_OPTIONS: { id: ThemeColor; name: string; hex: string }[] = [
+  { id: 'green', name: 'Forest Green', hex: '#116b52' },
+  { id: 'blue', name: 'Ocean Blue', hex: '#2563eb' },
+  { id: 'purple', name: 'Royal Purple', hex: '#7c3aed' },
+  { id: 'rose', name: 'Crimson Rose', hex: '#e11d48' },
+  { id: 'amber', name: 'Warm Amber', hex: '#d97706' },
+  { id: 'slate', name: 'Tech Slate', hex: '#475569' },
 ];
 
-const FONT_OPTIONS: { id: AppFont; name: string; description: string; sample: string }[] = [
-  { id: 'sans', name: 'Modern Sans', description: 'Clean system interface font', sample: 'Aa Bb 123' },
-  { id: 'rounded', name: 'Rounded Soft', description: 'Friendly curved typography', sample: 'Aa Bb 123' },
-  { id: 'mono', name: 'Technical Mono', description: 'Clean monospace terminal style', sample: 'Aa Bb 123' },
-  { id: 'serif', name: 'Editorial Serif', description: 'Classic editorial styling', sample: 'Aa Bb 123' },
+const FONT_OPTIONS: { id: AppFont; name: string; sample: string; fontFamily: string }[] = [
+  { id: 'sans', name: 'DM Sans', sample: 'Aa Bb 123', fontFamily: "'DM Sans', sans-serif" },
+  { id: 'rounded', name: 'Rounded Soft', sample: 'Aa Bb 123', fontFamily: "'Quicksand', 'Nunito', sans-serif" },
+  { id: 'jakarta', name: 'Plus Jakarta Sans', sample: 'Aa Bb 123', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+  { id: 'outfit', name: 'Outfit', sample: 'Aa Bb 123', fontFamily: "'Outfit', sans-serif" },
+  { id: 'mono', name: 'JetBrains Mono', sample: 'Aa Bb 123', fontFamily: "'JetBrains Mono', monospace" },
+  { id: 'serif', name: 'Playfair Display', sample: 'Aa Bb 123', fontFamily: "'Playfair Display', serif" },
 ];
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -62,12 +60,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const showNotice = (msg: string) => {
     setNotice(msg);
-    setTimeout(() => setNotice(null), 3500);
+    setTimeout(() => setNotice(null), 3000);
   };
 
   const handleDownloadBackup = async () => {
     const ok = await exportDatabaseBackup(state);
-    if (ok) showNotice('Full backup JSON file downloaded!');
+    if (ok) showNotice('Full backup downloaded');
   };
 
   const handleRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,12 +82,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             sessions: parsed.sessions,
             settings: parsed.settings || settings,
           });
-          showNotice('Backup restored successfully!');
+          showNotice('Backup restored');
         } else {
           alert('Invalid backup file structure.');
         }
       } catch (err) {
-        alert('Could not parse the backup file. Please ensure it is a valid JSON file.');
+        alert('Could not parse the backup file.');
       }
     };
     reader.readAsText(file);
@@ -100,9 +98,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const ok = await requestPersistentStorage();
     setStoragePersisted(ok);
     if (ok) {
-      showNotice('Persistent storage granted by browser!');
-    } else {
-      showNotice('Storage persistence already active.');
+      showNotice('Storage persistence active');
     }
   };
 
@@ -113,7 +109,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       settings,
     });
     setConfirmReset(false);
-    showNotice('Restored sample SNS 98-person roster and completed register!');
+    showNotice('Sample roster restored');
   };
 
   const handleClearAllData = () => {
@@ -124,24 +120,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     };
     onRestoreState(emptyState);
     setConfirmClear(false);
-    showNotice('All rolls and registers cleared. You now have a clean slate.');
+    showNotice('All data cleared');
   };
 
   return (
     <div className="mx-auto max-w-4xl pb-16">
-      {/* Title Card */}
+      {/* Title Card - App and Settings Icon adapt to theme */}
       <div className="mb-6 rounded-2xl border border-[#e3e1d8] bg-white p-5 shadow-sm dark:border-[#2b3731] dark:bg-[#1b2420]">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#116b52] text-white shadow-xs dark:bg-[#3fbf95] dark:text-[#0b1410]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--theme-primary)] text-white shadow-xs transition-colors">
             <Settings className="h-5 w-5" />
           </div>
           <div>
             <h1 className="font-bold text-xl text-[#1d2b25] dark:text-[#e8efe9]">
-              Settings &amp; Preferences
+              Settings
             </h1>
-            <p className="text-xs text-[#6b7770] dark:text-[#92a199]">
-              Customize app theme colors, appearance, WhatsApp integration, and data management.
-            </p>
           </div>
         </div>
 
@@ -154,18 +147,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       <div className="space-y-6">
-        {/* SECTION 1: UI Theme & Color Customization */}
+        {/* SECTION 1: Theme & Display Mode */}
         <div className="rounded-2xl border border-[#e3e1d8] bg-white p-5 shadow-sm dark:border-[#2b3731] dark:bg-[#1b2420]">
           <div className="flex items-center gap-2">
-            <Palette className="h-4 w-4 text-[#116b52] dark:text-[#3fbf95]" />
+            <Palette className="h-4 w-4 text-[var(--theme-primary)]" />
             <h2 className="font-bold text-base text-[#1d2b25] dark:text-[#e8efe9]">
               Theme &amp; Accent Color
             </h2>
           </div>
-          <p className="mt-0.5 text-xs text-[#6b7770] dark:text-[#92a199]">
-            Choose your preferred color theme for buttons, active tabs, and highlights.
-          </p>
 
+          {/* Theme Color Tiles: Swatches stay their true colors */}
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {THEME_OPTIONS.map((theme) => {
               const active = settings.themeColor === theme.id;
@@ -175,15 +166,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onClick={() => onUpdateSettings({ ...settings, themeColor: theme.id })}
                   className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                     active
-                      ? 'border-[#116b52] bg-[#e3f3ec]/50 shadow-xs dark:border-[#3fbf95] dark:bg-[#1e3a2f]/40'
-                      : 'border-[#e3e1d8] bg-[#f6f5f0] hover:border-[#116b52]/40 dark:border-[#2b3731] dark:bg-[#121816]'
+                      ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] shadow-xs ring-2 ring-[var(--theme-primary)]/40'
+                      : 'border-[#e3e1d8] bg-[#f6f5f0] hover:border-[var(--theme-primary)]/40 dark:border-[#2b3731] dark:bg-[#121816]'
                   }`}
                 >
                   <span
-                    className={`h-5 w-5 shrink-0 rounded-full ${theme.bgClass} shadow-xs ring-2 ${
-                      active ? 'ring-offset-2 ring-black/40 dark:ring-white/60' : 'ring-transparent'
+                    style={{ backgroundColor: theme.hex }}
+                    className={`theme-swatch-shell flex h-6 w-6 shrink-0 items-center justify-center rounded-full shadow-xs transition-transform ${
+                      active ? 'ring-2 ring-offset-2 ring-black/70 dark:ring-white scale-110' : 'ring-1 ring-black/20'
                     }`}
-                  />
+                  >
+                    {active && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                  </span>
                   <span className="font-semibold text-xs text-[#1d2b25] dark:text-[#e8efe9]">
                     {theme.name}
                   </span>
@@ -193,55 +187,81 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {/* Color Mode: Light / Dark / System */}
-          <div className="mt-5 border-t border-[#e3e1d8] pt-4 dark:border-[#2b3731]">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-[#6b7770] dark:text-[#92a199]">
+          <div className="mt-6 border-t border-[#e3e1d8] pt-4 dark:border-[#2b3731]">
+            <h3 className="font-bold text-xs uppercase tracking-wider text-[#6b7770] dark:text-[#92a199] mb-3">
               Display Mode
             </h3>
-            <div className="mt-2.5 flex flex-wrap gap-2">
+
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+              {/* Light Mode */}
               <button
                 onClick={() => onUpdateSettings({ ...settings, mode: 'light' })}
-                className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+                className={`flex items-center justify-between rounded-xl border p-3 text-left transition ${
                   settings.mode === 'light'
-                    ? 'border-[#116b52] bg-[#116b52] text-white dark:bg-[#3fbf95] dark:text-[#0b1410]'
-                    : 'border-[#e3e1d8] bg-[#f6f5f0] text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]'
+                    ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] shadow-sm ring-2 ring-[var(--theme-primary)] ring-offset-2'
+                    : 'border-[#e3e1d8] bg-[#f6f5f0] hover:border-[var(--theme-primary)]/40 dark:border-[#2b3731] dark:bg-[#121816]'
                 }`}
               >
-                <Sun className="h-4 w-4" />
-                <span>Light Mode</span>
+                <div className="flex items-center gap-2.5">
+                  <Sun className={`h-4 w-4 ${settings.mode === 'light' ? 'text-amber-500' : 'text-[#6b7770]'}`} />
+                  <span className="font-bold text-xs text-[#1d2b25] dark:text-[#e8efe9]">
+                    Light Mode
+                  </span>
+                </div>
+                {settings.mode === 'light' && (
+                  <CheckCircle2 className="h-4 w-4 text-[var(--theme-primary)] shrink-0" />
+                )}
               </button>
 
+              {/* Dark Mode */}
               <button
                 onClick={() => onUpdateSettings({ ...settings, mode: 'dark' })}
-                className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+                className={`flex items-center justify-between rounded-xl border p-3 text-left transition ${
                   settings.mode === 'dark'
-                    ? 'border-[#116b52] bg-[#116b52] text-white dark:bg-[#3fbf95] dark:text-[#0b1410]'
-                    : 'border-[#e3e1d8] bg-[#f6f5f0] text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]'
+                    ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] shadow-sm ring-2 ring-[var(--theme-primary)] ring-offset-2'
+                    : 'border-[#e3e1d8] bg-[#f6f5f0] hover:border-[var(--theme-primary)]/40 dark:border-[#2b3731] dark:bg-[#121816]'
                 }`}
               >
-                <Moon className="h-4 w-4" />
-                <span>Dark Mode</span>
+                <div className="flex items-center gap-2.5">
+                  <Moon className={`h-4 w-4 ${settings.mode === 'dark' ? 'text-indigo-400' : 'text-[#6b7770]'}`} />
+                  <span className="font-bold text-xs text-[#1d2b25] dark:text-[#e8efe9]">
+                    Dark Mode
+                  </span>
+                </div>
+                {settings.mode === 'dark' && (
+                  <CheckCircle2 className="h-4 w-4 text-[var(--theme-primary)] shrink-0" />
+                )}
               </button>
 
+              {/* System */}
               <button
                 onClick={() => onUpdateSettings({ ...settings, mode: 'system' })}
-                className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+                className={`flex items-center justify-between rounded-xl border p-3 text-left transition ${
                   settings.mode === 'system'
-                    ? 'border-[#116b52] bg-[#116b52] text-white dark:bg-[#3fbf95] dark:text-[#0b1410]'
-                    : 'border-[#e3e1d8] bg-[#f6f5f0] text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]'
+                    ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] shadow-sm ring-2 ring-[var(--theme-primary)] ring-offset-2'
+                    : 'border-[#e3e1d8] bg-[#f6f5f0] hover:border-[var(--theme-primary)]/40 dark:border-[#2b3731] dark:bg-[#121816]'
                 }`}
               >
-                <Monitor className="h-4 w-4" />
-                <span>System Automatic</span>
+                <div className="flex items-center gap-2.5">
+                  <Monitor className={`h-4 w-4 ${settings.mode === 'system' ? 'text-purple-400' : 'text-[#6b7770]'}`} />
+                  <span className="font-bold text-xs text-[#1d2b25] dark:text-[#e8efe9]">
+                    System
+                  </span>
+                </div>
+                {settings.mode === 'system' && (
+                  <CheckCircle2 className="h-4 w-4 text-[var(--theme-primary)] shrink-0" />
+                )}
               </button>
             </div>
           </div>
 
-          {/* Typography / Font Style */}
-          <div className="mt-5 border-t border-[#e3e1d8] pt-4 dark:border-[#2b3731]">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-[#6b7770] dark:text-[#92a199]">
+          {/* Typography / Font Style (No descriptions, just the names and preview chips) */}
+          <div className="mt-6 border-t border-[#e3e1d8] pt-4 dark:border-[#2b3731]">
+            <h3 className="font-bold text-xs uppercase tracking-wider text-[#6b7770] dark:text-[#92a199] mb-3">
               Font Style
             </h3>
-            <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               {FONT_OPTIONS.map((f) => {
                 const active = settings.font === f.id;
                 return (
@@ -250,19 +270,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onClick={() => onUpdateSettings({ ...settings, font: f.id })}
                     className={`flex items-center justify-between rounded-xl border p-3 text-left transition ${
                       active
-                        ? 'border-[#116b52] bg-[#e3f3ec]/50 shadow-xs dark:border-[#3fbf95] dark:bg-[#1e3a2f]/40'
-                        : 'border-[#e3e1d8] bg-[#f6f5f0] dark:border-[#2b3731] dark:bg-[#121816]'
+                        ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] shadow-xs ring-2 ring-[var(--theme-primary)]/50'
+                        : 'border-[#e3e1d8] bg-[#f6f5f0] hover:border-[var(--theme-primary)]/40 dark:border-[#2b3731] dark:bg-[#121816]'
                     }`}
                   >
-                    <div>
-                      <div className="font-bold text-xs text-[#1d2b25] dark:text-[#e8efe9]">
-                        {f.name}
-                      </div>
-                      <div className="text-[11px] text-[#6b7770] dark:text-[#92a199]">
-                        {f.description}
-                      </div>
+                    <div
+                      style={{ fontFamily: f.fontFamily }}
+                      className="font-bold text-xs text-[#1d2b25] dark:text-[#e8efe9]"
+                    >
+                      {f.name}
                     </div>
-                    <span className="font-mono text-xs opacity-60">{f.sample}</span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        style={{ fontFamily: f.fontFamily }}
+                        className="rounded-md border border-[#e3e1d8] bg-white px-2 py-0.5 text-xs font-semibold text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+                      >
+                        {f.sample}
+                      </span>
+                      {active && (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--theme-primary)]" />
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -270,76 +298,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
-        {/* SECTION 2: Communication & WhatsApp Settings */}
+        {/* SECTION 2: WhatsApp & Phone */}
         <div className="rounded-2xl border border-[#e3e1d8] bg-white p-5 shadow-sm dark:border-[#2b3731] dark:bg-[#1b2420]">
           <div className="flex items-center gap-2">
             <MessageCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <h2 className="font-bold text-base text-[#1d2b25] dark:text-[#e8efe9]">
-              WhatsApp &amp; Phone Contact Integration
+              WhatsApp &amp; Phone
             </h2>
           </div>
-          <p className="mt-0.5 text-xs text-[#6b7770] dark:text-[#92a199]">
-            Configure one-click WhatsApp chat and dialer links for roll call attendees.
-          </p>
 
-          <div className="mt-4 rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-4 dark:border-[#2b3731] dark:bg-[#121816]">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <label className="block text-xs font-bold text-[#1d2b25] dark:text-[#e8efe9]">
-                  Default International Country Calling Code
-                </label>
-                <p className="text-[11px] text-[#6b7770] dark:text-[#92a199]">
-                  Prepended to national numbers (e.g. <code>233</code> for Ghana, <code>1</code> for USA, <code>44</code> for UK).
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-bold text-[#6b7770]">+</span>
-                <input
-                  type="text"
-                  placeholder="233"
-                  value={settings.whatsappCountryCode}
-                  onChange={(e) =>
-                    onUpdateSettings({
-                      ...settings,
-                      whatsappCountryCode: e.target.value.replace(/[^\d]/g, ''),
-                    })
-                  }
-                  className="w-24 rounded-lg border border-[#e3e1d8] bg-white px-3 py-1.5 text-xs font-mono font-bold text-[#1d2b25] outline-hidden focus:border-[#116b52] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
-                />
-              </div>
-            </div>
-
-            <div className="mt-3 text-[11px] text-[#6b7770] dark:text-[#92a199] border-t border-[#e3e1d8] pt-2.5 dark:border-[#2b3731]">
-              <strong>How it works:</strong> Clicking the WhatsApp icon on any member with phone number <code>0555233330</code> automatically routes to <code>https://wa.me/233555233330</code>, opening your WhatsApp mobile app or WhatsApp Web desktop without needing to save them to your address book first.
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-4 dark:border-[#2b3731] dark:bg-[#121816]">
+            <label className="text-xs font-bold text-[#1d2b25] dark:text-[#e8efe9]">
+              Country Calling Code
+            </label>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-xs font-bold text-[#6b7770]">+</span>
+              <input
+                type="text"
+                placeholder="233"
+                value={settings.whatsappCountryCode}
+                onChange={(e) =>
+                  onUpdateSettings({
+                    ...settings,
+                    whatsappCountryCode: e.target.value.replace(/[^\d]/g, ''),
+                  })
+                }
+                className="w-20 rounded-lg border border-[#e3e1d8] bg-white px-2.5 py-1.5 text-xs font-mono font-bold text-[#1d2b25] outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+              />
             </div>
           </div>
         </div>
 
-        {/* SECTION 3: Data Management & Backup */}
+        {/* SECTION 3: Backup & Storage */}
         <div className="rounded-2xl border border-[#e3e1d8] bg-white p-5 shadow-sm dark:border-[#2b3731] dark:bg-[#1b2420]">
           <div className="flex items-center gap-2">
-            <HardDrive className="h-4 w-4 text-[#116b52] dark:text-[#3fbf95]" />
+            <HardDrive className="h-4 w-4 text-[var(--theme-primary)]" />
             <h2 className="font-bold text-base text-[#1d2b25] dark:text-[#e8efe9]">
-              Data Backup &amp; Storage Management
+              Backup &amp; Storage
             </h2>
           </div>
-          <p className="mt-0.5 text-xs text-[#6b7770] dark:text-[#92a199]">
-            Save full JSON database backups, restore previous copies, or start fresh on new devices.
-          </p>
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               onClick={handleDownloadBackup}
-              className="flex items-center justify-center gap-2 rounded-xl bg-[#116b52] py-2.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#0e5742] active:scale-95 dark:bg-[#3fbf95] dark:text-[#0b1410]"
+              className="flex items-center justify-center gap-2 rounded-xl bg-[var(--theme-primary)] py-2.5 text-xs font-semibold text-white shadow-2xs hover:opacity-90 active:scale-95 transition"
             >
               <Download className="h-4 w-4" />
-              <span>Download Full Backup (.json)</span>
+              <span>Download Backup (.json)</span>
             </button>
 
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] py-2.5 text-xs font-semibold text-[#1d2b25] shadow-2xs hover:bg-[#eae8df] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]">
               <Upload className="h-4 w-4 text-blue-600" />
-              <span>Restore Backup File (.json)</span>
+              <span>Restore Backup (.json)</span>
               <input type="file" accept=".json,application/json" onChange={handleRestoreFile} className="hidden" />
             </label>
           </div>
@@ -349,82 +359,71 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               <span>
-                Persistent Storage Status:{' '}
-                <strong>{storagePersisted ? 'Active (Protected)' : 'Standard'}</strong>
+                Persistent Storage:{' '}
+                <strong>{storagePersisted ? 'Active' : 'Standard'}</strong>
               </span>
             </div>
             {!storagePersisted && (
               <button
                 onClick={handleRequestPersistence}
-                className="rounded-lg bg-[#116b52] px-3 py-1 text-[11px] font-semibold text-white dark:bg-[#3fbf95] dark:text-[#0b1410]"
+                className="rounded-lg bg-[var(--theme-primary)] px-3 py-1 text-[11px] font-semibold text-white hover:opacity-90"
               >
                 Request Persistence
               </button>
             )}
           </div>
 
-          {/* Reset to Seed & Clear All Data */}
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#e3e1d8] pt-4 dark:border-[#2b3731]">
-            <div>
-              <span className="text-xs font-bold text-[#1d2b25] dark:text-[#e8efe9]">
-                Roster Initialization &amp; Clean Slate
-              </span>
-              <p className="text-[11px] text-[#6b7770] dark:text-[#92a199]">
-                Reset to reference demonstration data or wipe clean for a fresh device deployment.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {confirmReset ? (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={handleResetToSeed}
-                    className="rounded-lg bg-emerald-700 px-3 py-1 text-xs font-bold text-white shadow-xs"
-                  >
-                    Confirm Reset?
-                  </button>
-                  <button
-                    onClick={() => setConfirmReset(false)}
-                    className="text-xs text-[#6b7770]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
+          {/* Reset & Wipe Buttons */}
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-[#e3e1d8] pt-4 dark:border-[#2b3731]">
+            {confirmReset ? (
+              <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => setConfirmReset(true)}
-                  className="flex items-center gap-1 rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-1.5 text-xs font-medium text-[#1d2b25] hover:bg-[#eae8df] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                  onClick={handleResetToSeed}
+                  className="rounded-lg bg-emerald-700 px-3 py-1 text-xs font-bold text-white shadow-xs"
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  <span>Restore Sample SNS Roster</span>
+                  Confirm Reset?
                 </button>
-              )}
-
-              {confirmClear ? (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={handleClearAllData}
-                    className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-bold text-white shadow-xs"
-                  >
-                    Confirm Wipe?
-                  </button>
-                  <button
-                    onClick={() => setConfirmClear(false)}
-                    className="text-xs text-[#6b7770]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
                 <button
-                  onClick={() => setConfirmClear(true)}
-                  className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400"
+                  onClick={() => setConfirmReset(false)}
+                  className="text-xs text-[#6b7770]"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Clear All Data</span>
+                  Cancel
                 </button>
-              )}
-            </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmReset(true)}
+                className="flex items-center gap-1 rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-1.5 text-xs font-medium text-[#1d2b25] hover:bg-[#eae8df] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Restore Sample Roster</span>
+              </button>
+            )}
+
+            {confirmClear ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleClearAllData}
+                  className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-bold text-white shadow-xs"
+                >
+                  Confirm Wipe?
+                </button>
+                <button
+                  onClick={() => setConfirmClear(false)}
+                  className="text-xs text-[#6b7770]"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmClear(true)}
+                className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Clear All Data</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -487,27 +487,83 @@ export async function exportRosterToCSV(roll: Roll): Promise<boolean> {
 }
 
 /**
+ * Parses full CSV text according to RFC 4180 specifications.
+ * Correctly handles embedded commas inside quotes (e.g. "Assistant Overseer, Unity Hall"),
+ * escaped double-quotes (""), and multiline records.
+ */
+export function parseCSVRecords(text: string): string[][] {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentField = '';
+  let insideQuotes = false;
+
+  // Strip byte-order-mark if present
+  const cleaned = text.replace(/^\uFEFF/, '');
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    const nextChar = cleaned[i + 1];
+
+    if (char === '"') {
+      if (insideQuotes && nextChar === '"') {
+        // Escaped double-quote: "" -> "
+        currentField += '"';
+        i++; // skip next quote
+      } else {
+        // Toggle quote boundary
+        insideQuotes = !insideQuotes;
+      }
+    } else if (char === ',' && !insideQuotes) {
+      // Field separator outside quotes
+      currentRow.push(currentField.trim());
+      currentField = '';
+    } else if ((char === '\r' || char === '\n') && !insideQuotes) {
+      // Row separator outside quotes
+      if (char === '\r' && nextChar === '\n') {
+        i++; // skip \n
+      }
+      currentRow.push(currentField.trim());
+      currentField = '';
+      if (currentRow.some((f) => f.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+    } else {
+      currentField += char;
+    }
+  }
+
+  // Push any trailing field and row
+  if (currentField.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentField.trim());
+    if (currentRow.some((f) => f.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  return rows;
+}
+
+/**
  * Parses CSV text to extract members matching the roll's parameters.
+ * RFC 4180 compliant: correctly preserves strings containing commas (e.g. "Assistant Overseer, Unity Hall").
  */
 export function parseCSVToMembers(
   csvText: string,
   roll: Roll,
   idGenerator: (prefix: string) => string
 ): { members: Member[]; unmatchedHeaders: string[] } {
-  const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length < 2) return { members: [], unmatchedHeaders: [] };
+  const records = parseCSVRecords(csvText);
+  if (records.length < 2) return { members: [], unmatchedHeaders: [] };
 
-  // Parse header line (handling quotes)
-  const headerLine = lines[0];
-  const rawHeaders = headerLine
-    .split(/,|\t|;/)
-    .map((h) => h.replace(/^["']|["']$/g, '').trim());
+  // Header row
+  const rawHeaders = records[0].map((h) => h.replace(/^["']|["']$/g, '').trim());
 
-  // Find column index for name
+  // Find column index for member name
   let nameIndex = rawHeaders.findIndex((h) => /name|full\s*name|person|member/i.test(h));
-  if (nameIndex === -1) nameIndex = 0; // Default to first column
+  if (nameIndex === -1) nameIndex = 0;
 
-  // Map each roll field to a column index
+  // Map each roll field to matched column index
   const fieldMapping: { fieldId: string; colIndex: number }[] = [];
   const unmatchedHeaders: string[] = [];
 
@@ -526,39 +582,33 @@ export function parseCSVToMembers(
 
   const members: Member[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line) continue;
-
-    // Split CSV line respecting quoted fields
-    const cols = line
-      .split(/,|\t|;/)
-      .map((c) => c.replace(/^["']|["']$/g, '').trim());
+  for (let i = 1; i < records.length; i++) {
+    const cols = records[i];
+    if (!cols || cols.length === 0) continue;
 
     const name = cols[nameIndex];
-    if (!name) continue;
+    if (!name || !name.trim()) continue;
 
     const data: Record<string, string> = {};
     fieldMapping.forEach(({ fieldId, colIndex }) => {
       if (cols[colIndex] !== undefined) {
-        data[fieldId] = cols[colIndex];
+        data[fieldId] = cols[colIndex].trim();
       }
     });
 
-    // Populate any remaining fields by index order if not matched
+    // Populate any remaining fields by index order if not mapped
     roll.fields.forEach((f, idx) => {
       if (!data[f.id]) {
-        // offset by 1 if name was column 0
         const fallbackIdx = idx + 1;
         if (cols[fallbackIdx] !== undefined) {
-          data[f.id] = cols[fallbackIdx];
+          data[f.id] = cols[fallbackIdx].trim();
         }
       }
     });
 
     members.push({
       id: idGenerator('m'),
-      name,
+      name: name.trim(),
       unit: data['unit'] || '',
       phone: data['phone'] || '',
       tag: data['tag'] || '',
@@ -568,3 +618,4 @@ export function parseCSVToMembers(
 
   return { members, unmatchedHeaders };
 }
+

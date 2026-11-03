@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Search,
   UserPlus,
-  FileSpreadsheet,
   Trash2,
   Edit2,
   Check,
@@ -12,17 +11,28 @@ import {
   Upload,
   Download,
   Phone,
-  Tag,
-  Building,
   Sliders,
   Plus,
-  Layers,
-  Sparkles,
   CheckCircle2,
   MessageCircle,
+  Lightbulb,
+  Clock,
+  Calendar,
+  Layers,
 } from 'lucide-react';
-import { Roll, Member, RollField, FieldType } from '../types';
-import { uid, getMemberValue, getPhoneValue, getGroupValue, buildWhatsAppLink, loadSettings } from '../utils/storage';
+import { Roll, Member, RollField, FieldType, GroupLabelType, MemberTag, LabelConfig } from '../types';
+import {
+  uid,
+  getMemberValue,
+  getPhoneValue,
+  getGroupValue,
+  buildWhatsAppLink,
+  loadSettings,
+  formatGroupDisplay,
+  isMemberTagActive,
+  generateAutoLabel,
+  getMemberDisplayValues,
+} from '../utils/storage';
 import { exportRosterToCSV, parseCSVToMembers } from '../utils/exportUtils';
 
 interface RollEditorProps {
@@ -32,6 +42,27 @@ interface RollEditorProps {
   onStartSession: (roll: Roll) => void;
   onBack: () => void;
 }
+
+const TAG_COLOR_PALETTE = [
+  { name: 'Rose', color: '#e11d48' },
+  { name: 'Forest', color: '#116b52' },
+  { name: 'Blue', color: '#2563eb' },
+  { name: 'Amber', color: '#d97706' },
+  { name: 'Purple', color: '#7c3aed' },
+  { name: 'Orange', color: '#ea580c' },
+  { name: 'Teal', color: '#0d9488' },
+  { name: 'Slate', color: '#475569' },
+];
+
+const DAYS_OF_WEEK = [
+  { id: 0, label: 'Sun' },
+  { id: 1, label: 'Mon' },
+  { id: 2, label: 'Tue' },
+  { id: 3, label: 'Wed' },
+  { id: 4, label: 'Thu' },
+  { id: 5, label: 'Fri' },
+  { id: 6, label: 'Sat' },
+];
 
 export const RollEditor: React.FC<RollEditorProps> = ({
   roll,
@@ -51,7 +82,35 @@ export const RollEditor: React.FC<RollEditorProps> = ({
   const [newFieldType, setNewFieldType] = useState<FieldType>('text');
   const [newFieldRequired, setNewFieldRequired] = useState(false);
   const [newFieldIsGroup, setNewFieldIsGroup] = useState(false);
+  const [newFieldGroupLabelType, setNewFieldGroupLabelType] = useState<GroupLabelType>('numbers');
   const [newFieldIsPhone, setNewFieldIsPhone] = useState(false);
+  const [newFieldIsWhatsappActive, setNewFieldIsWhatsappActive] = useState(true);
+  const [newFieldOptions, setNewFieldOptions] = useState('');
+  const [newFieldLabelType, setNewFieldLabelType] = useState<'number' | 'letter' | 'both'>('number');
+  const [newFieldLabelPrefix, setNewFieldLabelPrefix] = useState('Pair ');
+  const [newFieldLabelStartValue, setNewFieldLabelStartValue] = useState(1);
+  const [newFieldLabelStep, setNewFieldLabelStep] = useState(1);
+  const [newFieldLabelItemsPer, setNewFieldLabelItemsPer] = useState(2);
+  const [newFieldShowInRoster, setNewFieldShowInRoster] = useState(true);
+  const [newFieldOrder, setNewFieldOrder] = useState<number>(1);
+
+  // Edit existing parameter state
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [editFieldName, setEditFieldName] = useState('');
+  const [editFieldType, setEditFieldType] = useState<FieldType>('text');
+  const [editFieldRequired, setEditFieldRequired] = useState(false);
+  const [editFieldIsGroup, setEditFieldIsGroup] = useState(false);
+  const [editFieldGroupLabelType, setEditFieldGroupLabelType] = useState<GroupLabelType>('numbers');
+  const [editFieldIsPhone, setEditFieldIsPhone] = useState(false);
+  const [editFieldIsWhatsappActive, setEditFieldIsWhatsappActive] = useState(true);
+  const [editFieldOptions, setEditFieldOptions] = useState('');
+  const [editFieldLabelType, setEditFieldLabelType] = useState<'number' | 'letter' | 'both'>('number');
+  const [editFieldLabelPrefix, setEditFieldLabelPrefix] = useState('Pair ');
+  const [editFieldLabelStartValue, setEditFieldLabelStartValue] = useState(1);
+  const [editFieldLabelStep, setEditFieldLabelStep] = useState(1);
+  const [editFieldLabelItemsPer, setEditFieldLabelItemsPer] = useState(2);
+  const [editFieldShowInRoster, setEditFieldShowInRoster] = useState(true);
+  const [editFieldOrder, setEditFieldOrder] = useState<number>(1);
 
   // Dynamic Add Member state (fieldId -> value)
   const [newMemberName, setNewMemberName] = useState('');
@@ -66,19 +125,45 @@ export const RollEditor: React.FC<RollEditorProps> = ({
   const [editMemberName, setEditMemberName] = useState('');
   const [editMemberData, setEditMemberData] = useState<Record<string, string>>({});
 
+  // Member Tag Modal State (Lightbulb feature - multi-parameter display times)
+  const [tagModalMember, setTagModalMember] = useState<Member | null>(null);
+  const [tagText, setTagText] = useState('');
+  const [tagColor, setTagColor] = useState('#e11d48');
+  const [tagUntilEnabled, setTagUntilEnabled] = useState(false);
+  const [tagUntilDateTime, setTagUntilDateTime] = useState('');
+  const [tagForEnabled, setTagForEnabled] = useState(false);
+  const [tagForDurationMinutes, setTagForDurationMinutes] = useState(60);
+  const [tagEveryEnabled, setTagEveryEnabled] = useState(false);
+  const [tagEveryDays, setTagEveryDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [tagEveryStartTime, setTagEveryStartTime] = useState('09:00');
+  const [tagEveryEndTime, setTagEveryEndTime] = useState('17:00');
+
   // Import / Export states
   const [notification, setNotification] = useState<string | null>(null);
   const [confirmDeleteRoll, setConfirmDeleteRoll] = useState(false);
   const [confirmDeleteMemberId, setConfirmDeleteMemberId] = useState<string | null>(null);
 
-  const fields = roll.fields || [
-    { id: 'unit', name: 'Affiliated Group / Unit', type: 'text', required: true },
-    { id: 'phone', name: 'Phone', type: 'phone', required: false, isPhoneField: true },
-    { id: 'tag', name: 'Pair #', type: 'tag', required: false, isGroupField: true },
-  ];
+  const fields: RollField[] = useMemo(() => {
+    if (roll.fields && roll.fields.length > 0) {
+      return roll.fields.map((f) => {
+        let t = f.type;
+        if ((t as string) === 'tag') t = 'label';
+        if ((t as string) === 'select') t = 'choice';
+        return {
+          ...f,
+          type: t,
+        };
+      });
+    }
+    return [
+      { id: 'unit', name: 'Affiliated Group / Unit', type: 'text', required: true },
+      { id: 'phone', name: 'Phone', type: 'phone', required: false, isPhoneField: true, isWhatsappActive: true },
+      { id: 'tag', name: 'Pair #', type: 'label', required: false, isGroupField: true },
+    ];
+  }, [roll.fields]);
 
   const groupField = fields.find((f) => f.id === roll.groupFieldId) || fields.find((f) => f.isGroupField);
-  const phoneField = fields.find((f) => f.isPhoneField || f.type === 'phone');
+  const phoneFields = fields.filter((f) => f.isPhoneField || f.type === 'phone');
 
   // Filtered members
   const filteredMembers = useMemo(() => {
@@ -92,6 +177,7 @@ export const RollEditor: React.FC<RollEditorProps> = ({
       if (!q) return true;
 
       if (m.name.toLowerCase().includes(q)) return true;
+      if (m.memberTag?.text?.toLowerCase().includes(q)) return true;
       return Object.values(m.data || {}).some((v) =>
         String(v).toLowerCase().includes(q)
       );
@@ -120,7 +206,7 @@ export const RollEditor: React.FC<RollEditorProps> = ({
     return Array.from(set).sort();
   }, [roll.members, roll.groupFieldId, fields]);
 
-  // Handle adding new member with dynamic parameters
+  // Handle adding new member with dynamic parameters & auto-assigned labels
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMemberName.trim()) return;
@@ -133,13 +219,22 @@ export const RollEditor: React.FC<RollEditorProps> = ({
       }
     }
 
+    const memberData: Record<string, string> = { ...newMemberData };
+
+    // Auto-assign labels for any label parameters if left blank
+    fields.forEach((f) => {
+      if (f.type === 'label' && (!memberData[f.id] || !memberData[f.id].trim())) {
+        memberData[f.id] = generateAutoLabel(roll.members.length, f);
+      }
+    });
+
     const member: Member = {
       id: uid('m'),
       name: newMemberName.trim(),
-      data: { ...newMemberData },
-      unit: newMemberData['unit'] || '',
-      phone: newMemberData['phone'] || '',
-      tag: newMemberData['tag'] || (groupField ? newMemberData[groupField.id] : ''),
+      data: memberData,
+      unit: memberData['unit'] || '',
+      phone: memberData['phone'] || '',
+      tag: memberData['tag'] || (groupField ? memberData[groupField.id] : ''),
     };
 
     onUpdateRoll({
@@ -160,13 +255,37 @@ export const RollEditor: React.FC<RollEditorProps> = ({
     if (!newFieldName.trim()) return;
 
     const fieldId = uid('f');
+    const isPhone = newFieldType === 'phone' || newFieldIsPhone;
+
+    const labelConfig: LabelConfig | undefined =
+      newFieldType === 'label'
+        ? {
+            labelType: newFieldLabelType,
+            prefix: newFieldLabelPrefix,
+            startValue: Number(newFieldLabelStartValue) || 1,
+            step: Number(newFieldLabelStep) || 1,
+            itemsPerLabel: Number(newFieldLabelItemsPer) || 1,
+          }
+        : undefined;
+
+    const options =
+      newFieldType === 'choice' && newFieldOptions.trim()
+        ? newFieldOptions.split(',').map((o) => o.trim()).filter(Boolean)
+        : undefined;
+
     const newField: RollField = {
       id: fieldId,
       name: newFieldName.trim(),
       type: newFieldType,
       required: newFieldRequired,
       isGroupField: newFieldIsGroup,
-      isPhoneField: newFieldIsPhone,
+      groupLabelType: newFieldIsGroup ? newFieldGroupLabelType : undefined,
+      isPhoneField: isPhone,
+      isWhatsappActive: isPhone ? newFieldIsWhatsappActive : false,
+      showInRoster: newFieldShowInRoster,
+      order: Number(newFieldOrder) || (fields.length + 1),
+      labelConfig,
+      options,
     };
 
     let updatedGroupFieldId = roll.groupFieldId;
@@ -186,7 +305,102 @@ export const RollEditor: React.FC<RollEditorProps> = ({
     setNewFieldType('text');
     setNewFieldRequired(false);
     setNewFieldIsGroup(false);
+    setNewFieldGroupLabelType('numbers');
     setNewFieldIsPhone(false);
+    setNewFieldIsWhatsappActive(true);
+    setNewFieldShowInRoster(true);
+    setNewFieldOrder(fields.length + 2);
+    setNewFieldOptions('');
+    setNewFieldLabelType('number');
+    setNewFieldLabelPrefix('Pair ');
+    setNewFieldLabelStartValue(1);
+    setNewFieldLabelStep(1);
+    setNewFieldLabelItemsPer(2);
+  };
+
+  const startEditField = (field: RollField) => {
+    setEditingFieldId(field.id);
+    setEditFieldName(field.name);
+    setEditFieldType(field.type);
+    setEditFieldRequired(!!field.required);
+    setEditFieldIsGroup(!!field.isGroupField || roll.groupFieldId === field.id);
+    setEditFieldGroupLabelType(field.groupLabelType || 'numbers');
+    setEditFieldIsPhone(!!field.isPhoneField || field.type === 'phone');
+    setEditFieldIsWhatsappActive(field.isWhatsappActive !== false);
+    setEditFieldShowInRoster(field.showInRoster !== false);
+    setEditFieldOrder(field.order ?? (fields.findIndex((f) => f.id === field.id) + 1));
+    setEditFieldOptions(field.options ? field.options.join(', ') : '');
+    if (field.labelConfig) {
+      setEditFieldLabelType(field.labelConfig.labelType);
+      setEditFieldLabelPrefix(field.labelConfig.prefix || '');
+      setEditFieldLabelStartValue(field.labelConfig.startValue);
+      setEditFieldLabelStep(field.labelConfig.step);
+      setEditFieldLabelItemsPer(field.labelConfig.itemsPerLabel || 1);
+    } else {
+      setEditFieldLabelType('number');
+      setEditFieldLabelPrefix(/pair/i.test(field.name) ? 'Pair ' : 'Group ');
+      setEditFieldLabelStartValue(1);
+      setEditFieldLabelStep(1);
+      setEditFieldLabelItemsPer(/pair/i.test(field.name) ? 2 : 1);
+    }
+  };
+
+  const saveEditField = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingFieldId || !editFieldName.trim()) return;
+
+    let updatedGroupFieldId = roll.groupFieldId;
+    if (editFieldIsGroup) {
+      updatedGroupFieldId = editingFieldId;
+    } else if (roll.groupFieldId === editingFieldId) {
+      updatedGroupFieldId = undefined;
+    }
+
+    const isPhone = editFieldType === 'phone' || editFieldIsPhone;
+    const labelConfig: LabelConfig | undefined =
+      editFieldType === 'label'
+        ? {
+            labelType: editFieldLabelType,
+            prefix: editFieldLabelPrefix,
+            startValue: Number(editFieldLabelStartValue) || 1,
+            step: Number(editFieldLabelStep) || 1,
+            itemsPerLabel: Number(editFieldLabelItemsPer) || 1,
+          }
+        : undefined;
+
+    const options =
+      editFieldType === 'choice' && editFieldOptions.trim()
+        ? editFieldOptions.split(',').map((o) => o.trim()).filter(Boolean)
+        : undefined;
+
+    const updatedFields = fields.map((f) => {
+      if (f.id === editingFieldId) {
+        return {
+          ...f,
+          name: editFieldName.trim(),
+          type: editFieldType,
+          required: editFieldRequired,
+          isGroupField: editFieldIsGroup,
+          groupLabelType: editFieldIsGroup ? editFieldGroupLabelType : undefined,
+          isPhoneField: isPhone,
+          isWhatsappActive: isPhone ? editFieldIsWhatsappActive : false,
+          showInRoster: editFieldShowInRoster,
+          order: Number(editFieldOrder) || 1,
+          labelConfig,
+          options,
+        };
+      }
+      return f;
+    });
+
+    onUpdateRoll({
+      ...roll,
+      fields: updatedFields,
+      groupFieldId: updatedGroupFieldId,
+      updatedAt: new Date().toISOString(),
+    });
+
+    setEditingFieldId(null);
   };
 
   const handleDeleteField = (fieldId: string) => {
@@ -203,7 +417,99 @@ export const RollEditor: React.FC<RollEditorProps> = ({
     });
   };
 
-  // Preset Template loader (Football Coach, Staff Roster, Class)
+  // Open Tag Modal for a specific member
+  const openTagModal = (member: Member) => {
+    setTagModalMember(member);
+    setTagText(member.memberTag?.text || '');
+    setTagColor(member.memberTag?.color || '#e11d48');
+    const t = member.memberTag?.timing;
+    if (t) {
+      setTagUntilEnabled(!!t.untilEnabled);
+      setTagUntilDateTime(t.untilDateTime || '');
+      setTagForEnabled(!!t.forEnabled);
+      setTagForDurationMinutes(t.forDurationMinutes || 60);
+      setTagEveryEnabled(!!t.everyEnabled);
+      setTagEveryDays(t.everyDays || [1, 2, 3, 4, 5]);
+      setTagEveryStartTime(t.everyStartTime || '09:00');
+      setTagEveryEndTime(t.everyEndTime || '17:00');
+    } else {
+      const legacy = member.memberTag?.timingType;
+      setTagUntilEnabled(legacy === 'until');
+      setTagUntilDateTime(member.memberTag?.untilDateTime || '');
+      setTagForEnabled(legacy === 'for');
+      setTagForDurationMinutes(member.memberTag?.forDurationMinutes || 60);
+      setTagEveryEnabled(legacy === 'every');
+      setTagEveryDays(member.memberTag?.everyDays || [1, 2, 3, 4, 5]);
+      setTagEveryStartTime(member.memberTag?.everyStartTime || '09:00');
+      setTagEveryEndTime(member.memberTag?.everyEndTime || '17:00');
+    }
+  };
+
+  // Save Tag configuration for member
+  const handleSaveMemberTag = () => {
+    if (!tagModalMember) return;
+
+    let updatedTag: MemberTag | undefined;
+    if (tagText.trim()) {
+      updatedTag = {
+        text: tagText.trim(),
+        color: tagColor,
+        timing: {
+          untilEnabled: tagUntilEnabled,
+          untilDateTime: tagUntilEnabled ? tagUntilDateTime : undefined,
+          forEnabled: tagForEnabled,
+          forDurationMinutes: tagForEnabled ? Number(tagForDurationMinutes) : undefined,
+          everyEnabled: tagEveryEnabled,
+          everyDays: tagEveryEnabled ? tagEveryDays : undefined,
+          everyStartTime: tagEveryEnabled ? tagEveryStartTime : undefined,
+          everyEndTime: tagEveryEnabled ? tagEveryEndTime : undefined,
+        },
+        createdAt: tagModalMember.memberTag?.createdAt || new Date().toISOString(),
+      };
+    }
+
+    const updatedMembers = roll.members.map((m) => {
+      if (m.id === tagModalMember.id) {
+        return {
+          ...m,
+          memberTag: updatedTag,
+        };
+      }
+      return m;
+    });
+
+    onUpdateRoll({
+      ...roll,
+      members: updatedMembers,
+      updatedAt: new Date().toISOString(),
+    });
+
+    setTagModalMember(null);
+  };
+
+  // Remove Tag
+  const handleRemoveMemberTag = () => {
+    if (!tagModalMember) return;
+    const updatedMembers = roll.members.map((m) => {
+      if (m.id === tagModalMember.id) {
+        return {
+          ...m,
+          memberTag: undefined,
+        };
+      }
+      return m;
+    });
+
+    onUpdateRoll({
+      ...roll,
+      members: updatedMembers,
+      updatedAt: new Date().toISOString(),
+    });
+
+    setTagModalMember(null);
+  };
+
+  // Preset Template loader (Football Coach, Staff Roster, Class, Church)
   const applyPresetTemplate = (preset: 'football' | 'staff' | 'church' | 'class') => {
     let presetFields: RollField[] = [];
     let groupFieldId = '';
@@ -211,31 +517,56 @@ export const RollEditor: React.FC<RollEditorProps> = ({
     if (preset === 'football') {
       presetFields = [
         { id: 'squad_no', name: 'Squad #', type: 'number', required: true },
-        { id: 'position', name: 'Position', type: 'text', required: true, isGroupField: true },
+        {
+          id: 'position',
+          name: 'Preferred Position',
+          type: 'choice',
+          required: true,
+          isGroupField: true,
+          options: ['Goalkeeper', 'Defender', 'Midfielder', 'Forward'],
+        },
         { id: 'country', name: 'Country / Nationality', type: 'text' },
-        { id: 'contact', name: 'Phone Contact', type: 'phone', isPhoneField: true },
+        { id: 'contact', name: 'Phone Contact', type: 'phone', isPhoneField: true, isWhatsappActive: true },
       ];
       groupFieldId = 'position';
     } else if (preset === 'staff') {
       presetFields = [
-        { id: 'unit', name: 'Department / Unit', type: 'text', required: true, isGroupField: true },
+        { id: 'unit', name: 'Working Unit', type: 'text', required: true, isGroupField: true },
         { id: 'role', name: 'Job Title', type: 'text', required: true },
-        { id: 'phone', name: 'Phone Number', type: 'phone', isPhoneField: true },
-        { id: 'status', name: 'Employment Status (Intern / Full-Time)', type: 'tag' },
+        { id: 'salary', name: 'Salary', type: 'number' },
+        {
+          id: 'status',
+          name: 'Status Tag',
+          type: 'choice',
+          options: ['Intern', 'Full-Time', 'Part-Time', 'On Leave'],
+        },
+        { id: 'phone', name: 'Phone', type: 'phone', isPhoneField: true, isWhatsappActive: true },
       ];
       groupFieldId = 'unit';
     } else if (preset === 'class') {
       presetFields = [
         { id: 'student_id', name: 'Student ID', type: 'text', required: true },
-        { id: 'group_no', name: 'Lab / Project Group #', type: 'tag', isGroupField: true },
-        { id: 'phone', name: 'Phone', type: 'phone', isPhoneField: true },
+        {
+          id: 'group_no',
+          name: 'Lab Group #',
+          type: 'label',
+          isGroupField: true,
+          labelConfig: { labelType: 'number', prefix: 'Group ', startValue: 1, step: 1, itemsPerLabel: 4 },
+        },
+        { id: 'phone', name: 'Phone', type: 'phone', isPhoneField: true, isWhatsappActive: true },
       ];
       groupFieldId = 'group_no';
     } else {
       presetFields = [
         { id: 'unit', name: 'Affiliated Group / Unit', type: 'text', required: true },
-        { id: 'phone', name: 'Phone', type: 'phone', isPhoneField: true },
-        { id: 'tag', name: 'Pair #', type: 'tag', isGroupField: true },
+        { id: 'phone', name: 'Phone', type: 'phone', isPhoneField: true, isWhatsappActive: true },
+        {
+          id: 'tag',
+          name: 'Pair #',
+          type: 'label',
+          isGroupField: true,
+          labelConfig: { labelType: 'number', prefix: 'Pair ', startValue: 1, step: 1, itemsPerLabel: 2 },
+        },
       ];
       groupFieldId = 'tag';
     }
@@ -250,43 +581,39 @@ export const RollEditor: React.FC<RollEditorProps> = ({
     setTimeout(() => setNotification(null), 3000);
   };
 
-  // CSV Export for mass editing
+  // CSV Export
   const handleExportCSV = async () => {
     const ok = await exportRosterToCSV(roll);
     if (ok) {
-      setNotification('Roster exported to CSV! You can edit in Excel or AI and re-import.');
+      setNotification('Roster exported to CSV! You can edit in Excel and re-import.');
       setTimeout(() => setNotification(null), 4000);
     }
   };
 
-  // CSV Import (from mass edit or external spreadsheet)
+  // CSV Import (RFC 4180 compliant)
   const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (!text) return;
+      const csvContent = event.target?.result as string;
+      if (!csvContent) return;
 
-      const { members } = parseCSVToMembers(text, roll, uid);
+      const { members } = parseCSVToMembers(csvContent, roll, uid);
       if (members.length === 0) {
-        alert('Could not find valid rows in the CSV file.');
+        alert('Could not find any members in this CSV file. Please make sure the CSV has a Full Name column.');
         return;
       }
 
-      const replace = confirm(
-        `Found ${members.length} members in CSV.\n\nClick OK to REPLACE the existing roster, or CANCEL to MERGE with existing members.`
-      );
-
-      let updatedMembers: Member[] = [];
-      if (replace) {
+      let updatedMembers: Member[];
+      if (roll.members.length === 0) {
         updatedMembers = members;
       } else {
-        // Merge: update matching by name or add new
-        const existingNames = new Map(roll.members.map((m) => [m.name.toLowerCase().trim(), m]));
-        const merged = [...roll.members];
+        const existingNames = new Map<string, Member>();
+        roll.members.forEach((m) => existingNames.set(m.name.toLowerCase().trim(), m));
 
+        const merged: Member[] = [...roll.members];
         members.forEach((imported) => {
           const key = imported.name.toLowerCase().trim();
           const match = existingNames.get(key);
@@ -370,7 +697,7 @@ export const RollEditor: React.FC<RollEditorProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => onStartSession(roll)}
-              className="flex items-center gap-1.5 rounded-lg bg-[#116b52] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-[#0e5742] dark:bg-[#3fbf95] dark:text-[#0b1410]"
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--theme-primary)] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:opacity-90 active:scale-95"
             >
               <Play className="h-3.5 w-3.5 fill-current" />
               <span>Take Register Now</span>
@@ -403,7 +730,7 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                 type="text"
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
-                className="w-full max-w-md rounded-lg border border-[#116b52] bg-white px-3 py-1.5 text-base font-bold text-[#1d2b25] dark:bg-[#121816] dark:text-[#e8efe9]"
+                className="w-full max-w-md rounded-lg border border-[var(--theme-primary)] bg-white px-3 py-1.5 text-base font-bold text-[#1d2b25] dark:bg-[#121816] dark:text-[#e8efe9]"
               />
               <button
                 onClick={() => {
@@ -412,7 +739,7 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                   }
                   setEditingName(false);
                 }}
-                className="rounded-lg bg-[#116b52] px-3 py-1.5 text-xs font-semibold text-white dark:bg-[#3fbf95] dark:text-[#0b1410]"
+                className="rounded-lg bg-[var(--theme-primary)] px-3 py-1.5 text-xs font-semibold text-white"
               >
                 Save
               </button>
@@ -432,17 +759,16 @@ export const RollEditor: React.FC<RollEditorProps> = ({
           )}
 
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-semibold text-[#116b52] dark:text-[#3fbf95]">
+            <span className="font-semibold text-[var(--theme-primary)]">
               {roll.members.length} People Registered
             </span>
             <span>•</span>
             <span className="text-[#6b7770] dark:text-[#92a199]">
-              {fields.length} Custom Parameters (
-              {fields.map((f) => f.name).join(', ')})
+              {fields.length} parameters
             </span>
             <button
               onClick={() => setShowSchemaModal(true)}
-              className="ml-1 inline-flex items-center gap-1 rounded-md border border-[#116b52]/40 bg-[#e3f3ec] px-2 py-0.5 text-[11px] font-semibold text-[#116b52] hover:bg-[#d4ede1] dark:border-[#3fbf95]/40 dark:bg-[#1e3a2f] dark:text-[#3fbf95]"
+              className="ml-1 inline-flex items-center gap-1 rounded-md border border-[var(--theme-primary)]/50 bg-[var(--theme-primary-light)] px-2 py-0.5 text-[11px] font-semibold text-[var(--theme-primary)] hover:opacity-90 transition-colors"
             >
               <Sliders className="h-3 w-3" />
               <span>Customize Parameters</span>
@@ -462,15 +788,15 @@ export const RollEditor: React.FC<RollEditorProps> = ({
           <button
             onClick={handleExportCSV}
             className="flex items-center gap-1.5 rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-1.5 font-semibold text-[#1d2b25] transition hover:bg-[#eae8df] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
-            title="Download CSV of this roster to mass edit in Excel, Python, or AI tools"
+            title="Download CSV of this roster to edit in Excel or other tools"
           >
-            <Download className="h-3.5 w-3.5 text-[#116b52] dark:text-[#3fbf95]" />
-            <span>Export Roster CSV (For AI / Mass Edit)</span>
+            <Download className="h-3.5 w-3.5 text-[var(--theme-primary)]" />
+            <span>Export CSV</span>
           </button>
 
           <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-1.5 font-semibold text-[#1d2b25] transition hover:bg-[#eae8df] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]">
-            <Upload className="h-3.5 w-3.5 text-[#116b52] dark:text-[#3fbf95]" />
-            <span>Import / Re-upload Edited CSV</span>
+            <Upload className="h-3.5 w-3.5 text-[var(--theme-primary)]" />
+            <span>Import/Re-upload edited CSV</span>
             <input
               type="file"
               accept=".csv,.txt"
@@ -484,7 +810,7 @@ export const RollEditor: React.FC<RollEditorProps> = ({
       {/* Add New Person Form with Custom Parameters */}
       <div className="mb-6 rounded-2xl border border-[#e3e1d8] bg-white p-5 shadow-sm dark:border-[#2b3731] dark:bg-[#1b2420]">
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-sm text-[#116b52] dark:text-[#3fbf95]">
+          <h2 className="font-bold text-sm text-[var(--theme-primary)]">
             Add a Person to {roll.name}
           </h2>
           <span className="text-[11px] text-[#6b7770] dark:text-[#92a199]">
@@ -505,37 +831,72 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                 placeholder="Full Name"
                 value={newMemberName}
                 onChange={(e) => setNewMemberName(e.target.value)}
-                className="w-full rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[#116b52] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                className="w-full rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
               />
             </div>
 
             {/* Dynamic Custom Fields */}
-            {fields.map((field) => (
-              <div key={field.id} className="sm:col-span-3">
-                <label className="block text-[11px] font-semibold text-[#1d2b25] dark:text-[#e8efe9] mb-1 truncate">
-                  {field.name} {field.required ? '*' : ''}
-                </label>
-                <input
-                  type={field.type === 'number' ? 'number' : field.type === 'phone' ? 'tel' : 'text'}
-                  required={field.required}
-                  placeholder={field.name}
-                  value={newMemberData[field.id] || ''}
-                  onChange={(e) =>
-                    setNewMemberData({
-                      ...newMemberData,
-                      [field.id]: e.target.value,
-                    })
-                  }
-                  className="w-full rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[#116b52] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
-                />
-              </div>
-            ))}
+            {fields.map((field) => {
+              if (field.type === 'choice' && field.options && field.options.length > 0) {
+                return (
+                  <div key={field.id} className="sm:col-span-3">
+                    <label className="block text-[11px] font-semibold text-[#1d2b25] dark:text-[#e8efe9] mb-1 truncate">
+                      {field.name} {field.required ? '*' : ''}
+                    </label>
+                    <select
+                      required={field.required}
+                      value={newMemberData[field.id] || ''}
+                      onChange={(e) =>
+                        setNewMemberData({
+                          ...newMemberData,
+                          [field.id]: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                    >
+                      <option value="">Select {field.name}...</option>
+                      {field.options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+
+              const autoPlaceholder =
+                field.type === 'label'
+                  ? `Auto (${generateAutoLabel(roll.members.length, field)})`
+                  : field.name;
+
+              return (
+                <div key={field.id} className="sm:col-span-3">
+                  <label className="block text-[11px] font-semibold text-[#1d2b25] dark:text-[#e8efe9] mb-1 truncate">
+                    {field.name} {field.required ? '*' : ''}
+                  </label>
+                  <input
+                    type={field.type === 'number' ? 'number' : field.type === 'phone' ? 'tel' : 'text'}
+                    required={field.required}
+                    placeholder={autoPlaceholder}
+                    value={newMemberData[field.id] || ''}
+                    onChange={(e) =>
+                      setNewMemberData({
+                        ...newMemberData,
+                        [field.id]: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                  />
+                </div>
+              );
+            })}
           </div>
 
           <div className="flex justify-end pt-1">
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-[#116b52] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#0e5742] active:scale-95 dark:bg-[#3fbf95] dark:text-[#0b1410]"
+              className="flex items-center gap-1.5 rounded-xl bg-[var(--theme-primary)] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
             >
               <UserPlus className="h-3.5 w-3.5" />
               <span>Add Member</span>
@@ -544,57 +905,54 @@ export const RollEditor: React.FC<RollEditorProps> = ({
         </form>
       </div>
 
-      {/* Roster View Controls (Search, View Mode, Grouping Filter) */}
-      <div className="mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6b7770] dark:text-[#92a199]" />
+      {/* Roster Search & Controls Bar */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6b7770]" />
           <input
-            type="search"
-            placeholder="Search roster members..."
+            type="text"
+            placeholder="Search by name, tag, or details..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full rounded-xl border border-[#e3e1d8] bg-white py-2 pl-9 pr-3 text-xs text-[#1d2b25] shadow-2xs outline-hidden placeholder:text-[#6b7770] focus:border-[#116b52] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+            className="w-full rounded-xl border border-[#e3e1d8] bg-white pl-9 pr-4 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
           />
         </div>
 
-        {/* Group Filter & View Mode Toggles */}
         <div className="flex items-center gap-2">
+          {/* Quick Group filter */}
           {uniqueGroups.length > 0 && (
             <select
               value={selectedGroupFilter}
               onChange={(e) => setSelectedGroupFilter(e.target.value)}
-              className="rounded-xl border border-[#e3e1d8] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+              className="rounded-xl border border-[#e3e1d8] bg-white px-3 py-2 text-xs text-[#1d2b25] outline-hidden dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
             >
-              <option value="all">
-                All {groupField ? groupField.name : 'Groups'} ({uniqueGroups.length})
-              </option>
+              <option value="all">All Groups ({roll.members.length})</option>
               {uniqueGroups.map((g) => (
                 <option key={g} value={g}>
-                  {g}
+                  {formatGroupDisplay(g, groupField)}
                 </option>
               ))}
             </select>
           )}
 
-          {/* Group View Toggle */}
+          {/* View Mode Toggle */}
           {groupField && (
-            <div className="flex rounded-xl border border-[#e3e1d8] bg-white p-0.5 text-xs font-medium dark:border-[#2b3731] dark:bg-[#1b2420]">
+            <div className="flex rounded-xl border border-[#e3e1d8] bg-white p-0.5 text-xs dark:border-[#2b3731] dark:bg-[#1b2420]">
               <button
                 onClick={() => setViewMode('flat')}
                 className={`rounded-lg px-2.5 py-1 transition ${
                   viewMode === 'flat'
-                    ? 'bg-[#116b52] text-white dark:bg-[#3fbf95] dark:text-[#0b1410]'
+                    ? 'bg-[var(--theme-primary)] text-white'
                     : 'text-[#6b7770]'
                 }`}
               >
-                List View
+                List
               </button>
               <button
                 onClick={() => setViewMode('grouped')}
                 className={`rounded-lg px-2.5 py-1 transition ${
                   viewMode === 'grouped'
-                    ? 'bg-[#116b52] text-white dark:bg-[#3fbf95] dark:text-[#0b1410]'
+                    ? 'bg-[var(--theme-primary)] text-white'
                     : 'text-[#6b7770]'
                 }`}
               >
@@ -615,8 +973,8 @@ export const RollEditor: React.FC<RollEditorProps> = ({
             >
               <div className="flex items-center justify-between border-b border-[#e3e1d8] pb-2 mb-3 dark:border-[#2b3731]">
                 <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-[#116b52] px-2.5 py-0.5 text-xs font-bold text-white dark:bg-[#3fbf95] dark:text-[#0b1410]">
-                    {groupField.name}: {groupName}
+                  <span className="rounded-full bg-[var(--theme-primary)] px-2.5 py-0.5 text-xs font-bold text-white">
+                    {groupField.name}: {formatGroupDisplay(groupName, groupField)}
                   </span>
                   <span className="text-xs text-[#6b7770] dark:text-[#92a199]">
                     ({membersInGroup.length} members)
@@ -627,60 +985,105 @@ export const RollEditor: React.FC<RollEditorProps> = ({
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {membersInGroup.map((m) => {
                   const phone = getPhoneValue(m, fields);
-                  const waLink = buildWhatsAppLink(phone, settings.whatsappCountryCode);
+                  const isWaActive = fields.some((f) => (f.isPhoneField || f.type === 'phone') && f.isWhatsappActive !== false);
+                  const waLink = isWaActive ? buildWhatsAppLink(phone, settings.whatsappCountryCode) : null;
+                  const activeTag = isMemberTagActive(m.memberTag);
 
                   return (
                     <div
                       key={m.id}
                       className="flex items-center justify-between rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-3 dark:border-[#2b3731] dark:bg-[#121816]"
                     >
-                      <div>
-                        <div className="font-semibold text-xs text-[#1d2b25] dark:text-[#e8efe9]">
-                          {m.name}
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-semibold text-xs text-[#1d2b25] dark:text-[#e8efe9]">
+                            {m.name}
+                          </span>
+                          {/* Dedicated Tag Lightbulb Feature Badge - ONLY shown next to name if set & active */}
+                          {activeTag && m.memberTag && (
+                            <span
+                              className="inline-flex items-center rounded-md px-1.5 py-0.2 text-[10px] font-bold shadow-2xs"
+                              style={{
+                                color: m.memberTag.color,
+                                backgroundColor: `${m.memberTag.color}15`,
+                                border: `1px solid ${m.memberTag.color}40`,
+                              }}
+                            >
+                              {m.memberTag.text}
+                            </span>
+                          )}
                         </div>
-                        <div className="mt-0.5 flex flex-wrap gap-1 text-[11px] text-[#6b7770] dark:text-[#92a199]">
-                          {fields
-                            .filter((f) => f.id !== groupField.id)
-                            .map((f) => {
-                              const val = getMemberValue(m, f.id);
-                              if (!val) return null;
-                              return (
-                                <span key={f.id} className="mr-1.5">
-                                  {val}
-                                </span>
-                              );
-                            })}
-                        </div>
+
+                        {/* Parameters displayed UNDER name as secondary text - values only separated by centered dot */}
+                        {(() => {
+                          const displayValues = getMemberDisplayValues(
+                            m,
+                            fields.filter((f) => f.id !== groupField.id)
+                          );
+                          if (displayValues.length === 0) return null;
+                          return (
+                            <div className="mt-1 text-[11px] text-[#6b7770] dark:text-[#92a199] truncate">
+                              {displayValues.join(' • ')}
+                            </div>
+                          );
+                        })()}
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      {/* Action Icons in Uniform Rounded Squares */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Lightbulb Tag Button */}
+                        <button
+                          type="button"
+                          onClick={() => openTagModal(m)}
+                          title={m.memberTag ? `Tag: ${m.memberTag.text}` : 'Set Tag for member'}
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg border transition ${
+                            activeTag && m.memberTag
+                              ? 'border-[var(--theme-primary)]/60 bg-[var(--theme-primary-light)] text-[var(--theme-primary)]'
+                              : 'border-[#e3e1d8] text-[#6b7770] hover:bg-[#eae8df] hover:text-[#1d2b25] dark:border-[#2b3731] dark:text-[#92a199] dark:hover:bg-[#1b2420]'
+                          }`}
+                        >
+                          <Lightbulb
+                            className={`h-3.5 w-3.5 ${activeTag && m.memberTag ? 'fill-current' : ''}`}
+                            style={activeTag && m.memberTag ? { color: m.memberTag.color } : undefined}
+                          />
+                        </button>
+
                         {phone && (
-                          <>
-                            <a
-                              href={`tel:${phone.split('/')[0].replace(/\s+/g, '')}`}
-                              title={`Call ${m.name}`}
-                              className="rounded-lg p-1 text-[#6b7770] hover:text-[#116b52] dark:text-[#92a199]"
-                            >
-                              <Phone className="h-3.5 w-3.5" />
-                            </a>
-                            {waLink && (
-                              <a
-                                href={waLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title={`WhatsApp ${m.name}`}
-                                className="rounded-lg p-1 text-[#6b7770] hover:text-emerald-600 dark:text-[#92a199]"
-                              >
-                                <MessageCircle className="h-3.5 w-3.5" />
-                              </a>
-                            )}
-                          </>
+                          <a
+                            href={`tel:${phone.split('/')[0].replace(/\s+/g, '')}`}
+                            title={`Call ${m.name}`}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-[var(--theme-primary-light)] hover:text-[var(--theme-primary)] dark:border-[#2b3731] dark:text-[#92a199]"
+                          >
+                            <Phone className="h-3 w-3" />
+                          </a>
                         )}
+
+                        {waLink && (
+                          <a
+                            href={waLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={`WhatsApp ${m.name}`}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-emerald-50 hover:text-emerald-600 dark:border-[#2b3731] dark:text-[#92a199]"
+                          >
+                            <MessageCircle className="h-3 w-3" />
+                          </a>
+                        )}
+
                         <button
                           onClick={() => startEditMember(m)}
-                          className="rounded-lg p-1 text-[#6b7770] hover:text-[#116b52]"
+                          title="Edit member"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-[#eae8df] hover:text-[#1d2b25] dark:border-[#2b3731] dark:text-[#92a199] dark:hover:bg-[#1b2420]"
                         >
-                          <Edit2 className="h-3.5 w-3.5" />
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteMember(m.id)}
+                          title="Delete member"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-rose-50 hover:text-rose-600 dark:border-[#2b3731] dark:text-[#92a199] dark:hover:bg-rose-950/40"
+                        >
+                          <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
                     </div>
@@ -701,13 +1104,15 @@ export const RollEditor: React.FC<RollEditorProps> = ({
             filteredMembers.map((member, index) => {
               const isEditing = editingMemberId === member.id;
               const phone = getPhoneValue(member, fields);
-              const waLink = buildWhatsAppLink(phone, settings.whatsappCountryCode);
+              const isWaActive = fields.some((f) => (f.isPhoneField || f.type === 'phone') && f.isWhatsappActive !== false);
+              const waLink = isWaActive ? buildWhatsAppLink(phone, settings.whatsappCountryCode) : null;
+              const activeTag = isMemberTagActive(member.memberTag);
 
               if (isEditing) {
                 return (
                   <div
                     key={member.id}
-                    className="rounded-xl border border-[#116b52] bg-white p-3 shadow-md dark:border-[#3fbf95] dark:bg-[#1b2420]"
+                    className="rounded-xl border border-[var(--theme-primary)] bg-white p-3 shadow-md dark:border-[var(--theme-primary)] dark:bg-[#1b2420]"
                   >
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
                       <div>
@@ -726,17 +1131,37 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                           <label className="text-[10px] text-[#6b7770] font-semibold truncate block">
                             {f.name}
                           </label>
-                          <input
-                            type="text"
-                            value={editMemberData[f.id] || ''}
-                            onChange={(e) =>
-                              setEditMemberData({
-                                ...editMemberData,
-                                [f.id]: e.target.value,
-                              })
-                            }
-                            className="w-full rounded-lg border border-[#e3e1d8] p-1.5 text-xs text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
-                          />
+                          {f.type === 'choice' && f.options && f.options.length > 0 ? (
+                            <select
+                              value={editMemberData[f.id] || ''}
+                              onChange={(e) =>
+                                setEditMemberData({
+                                  ...editMemberData,
+                                  [f.id]: e.target.value,
+                                })
+                              }
+                              className="w-full rounded-lg border border-[#e3e1d8] p-1.5 text-xs text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                            >
+                              <option value="">Select...</option>
+                              {f.options.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={editMemberData[f.id] || ''}
+                              onChange={(e) =>
+                                setEditMemberData({
+                                  ...editMemberData,
+                                  [f.id]: e.target.value,
+                                })
+                              }
+                              className="w-full rounded-lg border border-[#e3e1d8] p-1.5 text-xs text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -751,7 +1176,7 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                       </button>
                       <button
                         onClick={saveEditMember}
-                        className="flex items-center gap-1 rounded-lg bg-[#116b52] px-3 py-1 text-xs font-semibold text-white dark:bg-[#3fbf95] dark:text-[#0b1410]"
+                        className="flex items-center gap-1 rounded-lg bg-[var(--theme-primary)] px-3 py-1 text-xs font-semibold text-white"
                       >
                         <Check className="h-3 w-3" />
                         <span>Save</span>
@@ -764,81 +1189,93 @@ export const RollEditor: React.FC<RollEditorProps> = ({
               return (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between rounded-xl border border-[#e3e1d8] bg-white p-3 transition hover:border-[#116b52]/40 dark:border-[#2b3731] dark:bg-[#1b2420]"
+                  className="flex items-center justify-between rounded-xl border border-[#e3e1d8] bg-white p-3 transition hover:border-[var(--theme-primary)]/40 dark:border-[#2b3731] dark:bg-[#1b2420]"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#e3f3ec] text-xs font-bold text-[#116b52] dark:bg-[#1e3a2f] dark:text-[#3fbf95]">
+                  <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                    <div className="theme-tag-badge flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold">
                       {index + 1}
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-sm text-[#1d2b25] dark:text-[#e8efe9]">
                           {member.name}
                         </span>
-                        {/* Display badges for defined custom fields */}
-                        {fields.map((f) => {
-                          const val = getMemberValue(member, f.id);
-                          if (!val) return null;
-                          if (f.isGroupField) {
-                            return (
-                              <span
-                                key={f.id}
-                                className="rounded-full bg-[#116b52]/10 px-2 py-0.2 text-[10px] font-bold text-[#116b52] dark:bg-[#3fbf95]/20 dark:text-[#3fbf95]"
-                              >
-                                {val}
-                              </span>
-                            );
-                          }
-                          return null;
-                        })}
+
+                        {/* Dedicated Tag Lightbulb Feature Badge - ONLY shown next to name if set & active */}
+                        {activeTag && member.memberTag && (
+                          <span
+                            className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold shadow-2xs transition"
+                            style={{
+                              color: member.memberTag.color,
+                              backgroundColor: `${member.memberTag.color}18`,
+                              border: `1px solid ${member.memberTag.color}45`,
+                            }}
+                          >
+                            {member.memberTag.text}
+                          </span>
+                        )}
                       </div>
 
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-[#6b7770] dark:text-[#92a199]">
-                        {fields
-                          .filter((f) => !f.isGroupField)
-                          .map((f, fIdx) => {
-                            const val = getMemberValue(member, f.id);
-                            if (!val) return null;
-                            return (
-                              <React.Fragment key={f.id}>
-                                {fIdx > 0 && <span>•</span>}
-                                <span>{val}</span>
-                              </React.Fragment>
-                            );
-                          })}
-                      </div>
+                      {/* Parameters displayed UNDER name as secondary text - values only separated by centered dot */}
+                      {(() => {
+                        const displayValues = getMemberDisplayValues(member, fields);
+                        if (displayValues.length === 0) return null;
+                        return (
+                          <div className="mt-1 text-xs text-[#6b7770] dark:text-[#92a199]">
+                            {displayValues.join(' • ')}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  {/* Action Icons in Uniform Rounded Squares */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Lightbulb Tag Button */}
+                    <button
+                      type="button"
+                      onClick={() => openTagModal(member)}
+                      title={member.memberTag ? `Tag: ${member.memberTag.text}` : 'Set Tag for member'}
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg border transition ${
+                        activeTag && member.memberTag
+                          ? 'border-[var(--theme-primary)]/60 bg-[var(--theme-primary-light)] text-[var(--theme-primary)]'
+                          : 'border-[#e3e1d8] text-[#6b7770] hover:bg-[#f6f5f0] hover:text-[#1d2b25] dark:border-[#2b3731] dark:text-[#92a199] dark:hover:bg-[#121816]'
+                      }`}
+                    >
+                      <Lightbulb
+                        className={`h-3.5 w-3.5 ${activeTag && member.memberTag ? 'fill-current' : ''}`}
+                        style={activeTag && member.memberTag ? { color: member.memberTag.color } : undefined}
+                      />
+                    </button>
+
                     {phone && (
-                      <>
-                        <a
-                          href={`tel:${phone.split('/')[0].replace(/\s+/g, '')}`}
-                          title={`Call ${member.name}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-emerald-50 hover:text-emerald-700 dark:border-[#2b3731] dark:text-[#92a199]"
-                        >
-                          <Phone className="h-3 w-3" />
-                        </a>
-                        {waLink && (
-                          <a
-                            href={waLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={`Chat with ${member.name} on WhatsApp`}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-emerald-50 hover:text-emerald-700 dark:border-[#2b3731] dark:text-[#92a199]"
-                          >
-                            <MessageCircle className="h-3 w-3" />
-                          </a>
-                        )}
-                      </>
+                      <a
+                        href={`tel:${phone.split('/')[0].replace(/\s+/g, '')}`}
+                        title={`Call ${member.name}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-[var(--theme-primary-light)] hover:text-[var(--theme-primary)] dark:border-[#2b3731] dark:text-[#92a199]"
+                      >
+                        <Phone className="h-3 w-3" />
+                      </a>
+                    )}
+
+                    {waLink && (
+                      <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Chat with ${member.name} on WhatsApp`}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-emerald-50 hover:text-emerald-700 dark:border-[#2b3731] dark:text-[#92a199]"
+                      >
+                        <MessageCircle className="h-3 w-3" />
+                      </a>
                     )}
 
                     <button
                       onClick={() => startEditMember(member)}
-                      className="rounded-lg p-1.5 text-[#6b7770] hover:bg-stone-100 hover:text-[#1d2b25] dark:text-[#92a199]"
+                      title="Edit member"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-[#f6f5f0] hover:text-[#1d2b25] dark:border-[#2b3731] dark:text-[#92a199] dark:hover:bg-[#121816]"
                     >
-                      <Edit2 className="h-3.5 w-3.5" />
+                      <Edit2 className="h-3 w-3" />
                     </button>
 
                     {confirmDeleteMemberId === member.id ? (
@@ -851,9 +1288,10 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                     ) : (
                       <button
                         onClick={() => setConfirmDeleteMemberId(member.id)}
-                        className="rounded-lg p-1.5 text-[#6b7770] hover:bg-rose-50 hover:text-rose-600 dark:text-[#92a199]"
+                        title="Delete member"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e3e1d8] text-[#6b7770] hover:bg-rose-50 hover:text-rose-600 dark:border-[#2b3731] dark:text-[#92a199] dark:hover:bg-rose-950/40"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3 w-3" />
                       </button>
                     )}
                   </div>
@@ -864,15 +1302,281 @@ export const RollEditor: React.FC<RollEditorProps> = ({
         </div>
       )}
 
+      {/* Member Tag & Schedule Modal (Lightbulb Feature) */}
+      {tagModalMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-[#1b2420] border border-[#e3e1d8] dark:border-[#2b3731]">
+            <div className="flex items-center justify-between border-b border-[#e3e1d8] pb-3 dark:border-[#2b3731]">
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex h-7 w-7 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `${tagColor}20`, color: tagColor }}
+                >
+                  <Lightbulb className="h-4 w-4 fill-current" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#1d2b25] dark:text-[#e8efe9]">
+                    Member Tag: {tagModalMember.name}
+                  </h3>
+                  <p className="text-[11px] text-[#6b7770] dark:text-[#92a199]">
+                    Custom label displayed next to name
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTagModalMember(null)}
+                className="rounded-lg p-1 text-[#6b7770] hover:bg-stone-100 dark:text-[#92a199]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {/* Tag Text Input */}
+              <div>
+                <label className="block text-[11px] font-semibold text-[#1d2b25] dark:text-[#e8efe9] mb-1">
+                  Tag Text
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Captain, Substitute, On Duty, VIP, Intern"
+                  value={tagText}
+                  onChange={(e) => setTagText(e.target.value)}
+                  className="w-full rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                />
+              </div>
+
+              {/* Tag Color Swatches */}
+              <div>
+                <label className="block text-[11px] font-semibold text-[#1d2b25] dark:text-[#e8efe9] mb-1.5">
+                  Tag Color
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {TAG_COLOR_PALETTE.map((pal) => (
+                    <button
+                      key={pal.color}
+                      type="button"
+                      onClick={() => setTagColor(pal.color)}
+                      style={{ backgroundColor: pal.color }}
+                      className={`h-7 w-7 rounded-lg transition-transform ${
+                        tagColor.toLowerCase() === pal.color.toLowerCase()
+                          ? 'ring-2 ring-offset-2 ring-stone-800 scale-110'
+                          : 'hover:scale-105'
+                      }`}
+                      title={pal.name}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={tagColor}
+                    onChange={(e) => setTagColor(e.target.value)}
+                    className="h-7 w-7 cursor-pointer rounded-lg border-0 bg-transparent p-0"
+                    title="Custom color"
+                  />
+                </div>
+              </div>
+
+              {/* Live Preview */}
+              {tagText.trim() && (
+                <div className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-2.5 text-xs dark:border-[#2b3731] dark:bg-[#121816]">
+                  <span className="text-[10px] uppercase tracking-wider text-[#6b7770] font-semibold block mb-1">
+                    Live Preview:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-[#1d2b25] dark:text-[#e8efe9]">
+                      {tagModalMember.name}
+                    </span>
+                    <span
+                      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold shadow-2xs"
+                      style={{
+                        color: tagColor,
+                        backgroundColor: `${tagColor}18`,
+                        border: `1px solid ${tagColor}40`,
+                      }}
+                    >
+                      {tagText}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Display Timing Options */}
+              <div>
+                <label className="block text-[11px] font-semibold text-[#1d2b25] dark:text-[#e8efe9] mb-1.5">
+                  Display Times
+                </label>
+                <div className="space-y-2.5">
+                  {/* Parameter 1: Until a set time and/or date */}
+                  <div className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-2.5 dark:border-[#2b3731] dark:bg-[#121816]">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-[#1d2b25] dark:text-[#e8efe9] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={tagUntilEnabled}
+                        onChange={(e) => setTagUntilEnabled(e.target.checked)}
+                        className="rounded accent-[var(--theme-primary)]"
+                      />
+                      <span>Until a set time and/or date</span>
+                    </label>
+                    {tagUntilEnabled && (
+                      <input
+                        type="datetime-local"
+                        value={tagUntilDateTime}
+                        onChange={(e) => setTagUntilDateTime(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-[#e3e1d8] bg-white p-1.5 text-xs text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+                      />
+                    )}
+                  </div>
+
+                  {/* Parameter 2: For a set period */}
+                  <div className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-2.5 dark:border-[#2b3731] dark:bg-[#121816]">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-[#1d2b25] dark:text-[#e8efe9] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={tagForEnabled}
+                        onChange={(e) => setTagForEnabled(e.target.checked)}
+                        className="rounded accent-[var(--theme-primary)]"
+                      />
+                      <span>For a set period</span>
+                    </label>
+                    {tagForEnabled && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {[
+                          { label: '1 hour', min: 60 },
+                          { label: '4 hours', min: 240 },
+                          { label: '8 hours', min: 480 },
+                          { label: '1 day', min: 1440 },
+                          { label: '3 days', min: 4320 },
+                          { label: '7 days', min: 10080 },
+                        ].map((dur) => (
+                          <button
+                            key={dur.min}
+                            type="button"
+                            onClick={() => setTagForDurationMinutes(dur.min)}
+                            className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                              tagForDurationMinutes === dur.min
+                                ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] text-[var(--theme-primary)] font-bold'
+                                : 'border-[#e3e1d8] bg-white text-[#6b7770] hover:bg-[#eae8df] dark:border-[#2b3731] dark:bg-[#1b2420]'
+                            }`}
+                          >
+                            {dur.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Parameter 3: Every set time and/or date (recurring) */}
+                  <div className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] p-2.5 dark:border-[#2b3731] dark:bg-[#121816]">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-[#1d2b25] dark:text-[#e8efe9] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={tagEveryEnabled}
+                        onChange={(e) => setTagEveryEnabled(e.target.checked)}
+                        className="rounded accent-[var(--theme-primary)]"
+                      />
+                      <span>Every set time and/or date (recurring)</span>
+                    </label>
+                    {tagEveryEnabled && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex gap-1">
+                          {DAYS_OF_WEEK.map((d) => {
+                            const selected = tagEveryDays.includes(d.id);
+                            return (
+                              <button
+                                key={d.id}
+                                type="button"
+                                onClick={() => {
+                                  if (selected) {
+                                    setTagEveryDays(tagEveryDays.filter((id) => id !== d.id));
+                                  } else {
+                                    setTagEveryDays([...tagEveryDays, d.id]);
+                                  }
+                                }}
+                                className={`h-7 w-7 rounded-lg text-[10px] font-bold transition ${
+                                  selected
+                                    ? 'bg-[var(--theme-primary)] text-white'
+                                    : 'border border-[#e3e1d8] bg-white text-[#6b7770] hover:bg-stone-100 dark:border-[#2b3731] dark:bg-[#1b2420]'
+                                }`}
+                              >
+                                {d.label[0]}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-[#6b7770]">From</span>
+                          <input
+                            type="time"
+                            value={tagEveryStartTime}
+                            onChange={(e) => setTagEveryStartTime(e.target.value)}
+                            className="rounded-lg border border-[#e3e1d8] bg-white px-2 py-1 text-xs dark:border-[#2b3731] dark:bg-[#1b2420]"
+                          />
+                          <span className="text-[#6b7770]">to</span>
+                          <input
+                            type="time"
+                            value={tagEveryEndTime}
+                            onChange={(e) => setTagEveryEndTime(e.target.value)}
+                            className="rounded-lg border border-[#e3e1d8] bg-white px-2 py-1 text-xs dark:border-[#2b3731] dark:bg-[#1b2420]"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {!tagUntilEnabled && !tagForEnabled && !tagEveryEnabled && (
+                    <p className="text-[11px] text-[#6b7770] italic dark:text-[#92a199]">
+                      No schedule selected: Tag will be active continuously until removed.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between border-t border-[#e3e1d8] pt-3 dark:border-[#2b3731]">
+              {tagModalMember.memberTag ? (
+                <button
+                  type="button"
+                  onClick={handleRemoveMemberTag}
+                  className="rounded-xl px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                >
+                  Remove Tag
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTagModalMember(null)}
+                  className="rounded-xl px-3 py-1.5 text-xs font-semibold text-[#6b7770]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveMemberTag}
+                  className="flex items-center gap-1.5 rounded-xl bg-[var(--theme-primary)] px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Save Tag</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Schema / Custom Parameter Manager Modal */}
       {showSchemaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1b2420]">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1b2420]">
             <div className="flex items-center justify-between border-b border-[#e3e1d8] pb-3 dark:border-[#2b3731]">
               <div className="flex items-center gap-2">
-                <Sliders className="h-5 w-5 text-[#116b52] dark:text-[#3fbf95]" />
+                <Sliders className="h-5 w-5 text-[var(--theme-primary)]" />
                 <h3 className="font-bold text-base text-[#1d2b25] dark:text-[#e8efe9]">
-                  Customize Roster Parameters
+                  Customize Parameters
                 </h3>
               </div>
               <button
@@ -923,53 +1627,307 @@ export const RollEditor: React.FC<RollEditorProps> = ({
             {/* Current Parameters List */}
             <div className="mt-4">
               <span className="text-[11px] font-bold uppercase tracking-wider text-[#6b7770] dark:text-[#92a199]">
-                Current Active Parameters:
+                Current Active Parameters ({fields.length}):
               </span>
-              <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {fields.map((field) => (
-                  <div
-                    key={field.id}
-                    className="flex items-center justify-between rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs dark:border-[#2b3731] dark:bg-[#121816]"
-                  >
-                    <div>
-                      <span className="font-bold text-[#1d2b25] dark:text-[#e8efe9]">
-                        {field.name}
-                      </span>
-                      <span className="ml-2 font-mono text-[10px] text-[#6b7770] dark:text-[#92a199]">
-                        ({field.type})
-                      </span>
-                      {field.required && (
-                        <span className="ml-1.5 text-rose-500 font-bold text-[10px]">
-                          Required
-                        </span>
-                      )}
-                      {field.isGroupField && (
-                        <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.2 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                          Group / Pair
-                        </span>
-                      )}
-                      {field.isPhoneField && (
-                        <span className="ml-1.5 rounded bg-blue-100 px-1.5 py-0.2 text-[10px] font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                          Call / WhatsApp
-                        </span>
-                      )}
-                    </div>
+              <div className="mt-2 space-y-2 max-h-60 overflow-y-auto pr-1">
+                {fields.map((field) => {
+                  const isEditingThis = editingFieldId === field.id;
 
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteField(field.id)}
-                      className="rounded-lg p-1 text-[#6b7770] hover:text-rose-600"
+                  if (isEditingThis) {
+                    return (
+                      <div
+                        key={field.id}
+                        className="rounded-xl border-2 border-[var(--theme-primary)] bg-white p-3 shadow-md dark:border-[var(--theme-primary)] dark:bg-[#121816]"
+                      >
+                        <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#e3e1d8] dark:border-[#2b3731]">
+                          <span className="font-bold text-xs text-[var(--theme-primary)] flex items-center gap-1">
+                            <Edit2 className="h-3 w-3" />
+                            <span>Edit Parameter: {field.name}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingFieldId(null)}
+                            className="text-[#6b7770] hover:text-[#1d2b25]"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-[#6b7770] mb-0.5">
+                              Parameter Name
+                            </label>
+                            <input
+                              type="text"
+                              value={editFieldName}
+                              onChange={(e) => setEditFieldName(e.target.value)}
+                              className="w-full rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] px-2.5 py-1.5 text-xs text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-semibold text-[#6b7770] mb-0.5">
+                              Data Type
+                            </label>
+                            <select
+                              value={editFieldType}
+                              onChange={(e) => setEditFieldType(e.target.value as FieldType)}
+                              className="w-full rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] px-2.5 py-1.5 text-xs text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+                            >
+                              <option value="text">Text</option>
+                              <option value="number">Number</option>
+                              <option value="phone">Phone</option>
+                              <option value="label">Label</option>
+                              <option value="choice">Choice</option>
+                              <option value="email">Email</option>
+                              <option value="date">Date</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Choice options input */}
+                        {editFieldType === 'choice' && (
+                          <div className="mt-2">
+                            <label className="block text-[10px] font-semibold text-[#6b7770] mb-0.5">
+                              Options (comma-separated)
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Intern, Full-Time, Contractor, On Leave"
+                              value={editFieldOptions}
+                              onChange={(e) => setEditFieldOptions(e.target.value)}
+                              className="w-full rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] px-2.5 py-1.5 text-xs text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#1b2420] dark:text-[#e8efe9]"
+                            />
+                          </div>
+                        )}
+
+                        {/* Label formatting section */}
+                        {editFieldType === 'label' && (
+                          <div className="mt-2.5 rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] p-2.5 dark:border-[#2b3731] dark:bg-[#1b2420]">
+                            <label className="block text-[11px] font-bold text-[#1d2b25] dark:text-[#e8efe9] mb-1.5">
+                              Label Formatting
+                            </label>
+                            <div className="grid grid-cols-3 gap-1.5 text-[11px] mb-2">
+                              <label className={`flex items-center gap-1.5 rounded-md border p-1.5 cursor-pointer transition ${
+                                editFieldLabelType === 'number' ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] text-[var(--theme-primary)] font-bold' : 'border-[#e3e1d8] dark:border-[#2b3731]'
+                              }`}>
+                                <input
+                                  type="radio"
+                                  name={`editLabelType_${field.id}`}
+                                  value="number"
+                                  checked={editFieldLabelType === 'number'}
+                                  onChange={() => setEditFieldLabelType('number')}
+                                  className="accent-[var(--theme-primary)]"
+                                />
+                                <span>Numbered (1, 2, 3...)</span>
+                              </label>
+
+                              <label className={`flex items-center gap-1.5 rounded-md border p-1.5 cursor-pointer transition ${
+                                editFieldLabelType === 'letter' ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] text-[var(--theme-primary)] font-bold' : 'border-[#e3e1d8] dark:border-[#2b3731]'
+                              }`}>
+                                <input
+                                  type="radio"
+                                  name={`editLabelType_${field.id}`}
+                                  value="letter"
+                                  checked={editFieldLabelType === 'letter'}
+                                  onChange={() => setEditFieldLabelType('letter')}
+                                  className="accent-[var(--theme-primary)]"
+                                />
+                                <span>Lettered (A, B, C...)</span>
+                              </label>
+
+                              <label className={`flex items-center gap-1.5 rounded-md border p-1.5 cursor-pointer transition ${
+                                editFieldLabelType === 'both' ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] text-[var(--theme-primary)] font-bold' : 'border-[#e3e1d8] dark:border-[#2b3731]'
+                              }`}>
+                                <input
+                                  type="radio"
+                                  name={`editLabelType_${field.id}`}
+                                  value="both"
+                                  checked={editFieldLabelType === 'both'}
+                                  onChange={() => setEditFieldLabelType('both')}
+                                  className="accent-[var(--theme-primary)]"
+                                />
+                                <span>Both (1-A, 1-B...)</span>
+                              </label>
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-2 text-xs">
+                              <div className="col-span-2">
+                                <label className="block text-[10px] text-[#6b7770]">Prefix / Structure</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Pair , Group "
+                                  value={editFieldLabelPrefix}
+                                  onChange={(e) => setEditFieldLabelPrefix(e.target.value)}
+                                  className="w-full rounded-md border border-[#e3e1d8] bg-white p-1 text-xs dark:border-[#2b3731] dark:bg-[#121816]"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-[#6b7770]">Start From</label>
+                                <input
+                                  type="number"
+                                  value={editFieldLabelStartValue}
+                                  onChange={(e) => setEditFieldLabelStartValue(Number(e.target.value))}
+                                  className="w-full rounded-md border border-[#e3e1d8] bg-white p-1 text-xs dark:border-[#2b3731] dark:bg-[#121816]"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-[#6b7770]">Step</label>
+                                <input
+                                  type="number"
+                                  value={editFieldLabelStep}
+                                  onChange={(e) => setEditFieldLabelStep(Number(e.target.value))}
+                                  className="w-full rounded-md border border-[#e3e1d8] bg-white p-1 text-xs dark:border-[#2b3731] dark:bg-[#121816]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Parameter Checkbox Settings: Required, Group, Display in roster, Order, W/A active */}
+                        <div className="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-[#6b7770] dark:text-[#92a199]">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editFieldRequired}
+                              onChange={(e) => setEditFieldRequired(e.target.checked)}
+                              className="rounded accent-[var(--theme-primary)]"
+                            />
+                            <span>Required</span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editFieldIsGroup}
+                              onChange={(e) => setEditFieldIsGroup(e.target.checked)}
+                              className="rounded accent-[var(--theme-primary)]"
+                            />
+                            <span>Group</span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editFieldShowInRoster}
+                              onChange={(e) => setEditFieldShowInRoster(e.target.checked)}
+                              className="rounded accent-[var(--theme-primary)]"
+                            />
+                            <span>Display in roster</span>
+                          </label>
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] font-semibold text-[#1d2b25] dark:text-[#e8efe9]">Order:</span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={editFieldOrder}
+                              onChange={(e) => setEditFieldOrder(Number(e.target.value))}
+                              className="w-14 rounded-md border border-[#e3e1d8] bg-white px-2 py-0.5 text-xs text-center text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                            />
+                          </div>
+
+                          {editFieldType === 'phone' && (
+                            <label className="flex items-center gap-1.5 cursor-pointer text-emerald-700 dark:text-emerald-400 font-medium">
+                              <input
+                                type="checkbox"
+                                checked={editFieldIsWhatsappActive}
+                                onChange={(e) => setEditFieldIsWhatsappActive(e.target.checked)}
+                                className="rounded accent-emerald-600"
+                              />
+                              <span>W/A active</span>
+                            </label>
+                          )}
+                        </div>
+
+                        <div className="mt-2.5 flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingFieldId(null)}
+                            className="rounded-lg px-2.5 py-1 text-xs text-[#6b7770]"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveEditField()}
+                            className="flex items-center gap-1 rounded-lg bg-[var(--theme-primary)] px-3 py-1 text-xs font-semibold text-white"
+                          >
+                            <Check className="h-3 w-3" />
+                            <span>Save Changes</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={field.id}
+                      className="flex items-center justify-between rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs dark:border-[#2b3731] dark:bg-[#121816]"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-bold text-[#1d2b25] dark:text-[#e8efe9]">
+                          {field.name}
+                        </span>
+                        <span className="font-mono text-[10px] text-[#6b7770] dark:text-[#92a199]">
+                          ({field.type})
+                        </span>
+                        {field.order !== undefined && (
+                          <span className="rounded bg-[#f0f0ea] px-1.5 py-0.2 text-[10px] font-semibold text-[#6b7770] dark:bg-[#25322c] dark:text-[#92a199]">
+                            #{field.order}
+                          </span>
+                        )}
+                        {field.showInRoster === false && (
+                          <span className="rounded bg-stone-200 px-1.5 py-0.2 text-[10px] font-bold text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                            Hidden in roster
+                          </span>
+                        )}
+                        {field.required && (
+                          <span className="rounded bg-rose-50 px-1.5 py-0.2 text-[10px] font-bold text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
+                            Required
+                          </span>
+                        )}
+                        {field.isGroupField && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.2 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                            Group
+                          </span>
+                        )}
+                        {field.type === 'phone' && field.isWhatsappActive !== false && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.2 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                            W/A active
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEditField(field)}
+                          title="Edit parameter"
+                          className="rounded-lg p-1.5 text-[#6b7770] hover:bg-[#e3e1d8]/50 hover:text-[var(--theme-primary)] dark:hover:bg-[#2b3731]"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteField(field.id)}
+                          title="Delete parameter"
+                          className="rounded-lg p-1.5 text-[#6b7770] hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             {/* Add New Custom Parameter Form */}
             <form onSubmit={handleAddField} className="mt-4 border-t border-[#e3e1d8] pt-3 dark:border-[#2b3731]">
-              <span className="text-xs font-bold text-[#116b52] dark:text-[#3fbf95]">
+              <span className="text-xs font-bold text-[var(--theme-primary)]">
                 + Add Another Parameter
               </span>
 
@@ -977,10 +1935,10 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Parameter Name (e.g. Squad #, Position)"
+                  placeholder="Parameter Name (e.g. Squad #, Department)"
                   value={newFieldName}
                   onChange={(e) => setNewFieldName(e.target.value)}
-                  className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[#116b52] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                  className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
                 />
 
                 <select
@@ -988,24 +1946,125 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                   onChange={(e) => setNewFieldType(e.target.value as FieldType)}
                   className="rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs font-medium text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
                 >
-                  <option value="text">Text (General string)</option>
-                  <option value="number">Number (e.g. Squad #, Age, Salary)</option>
-                  <option value="phone">Phone (Enables Call &amp; WhatsApp)</option>
-                  <option value="tag">Tag / Group (e.g. Pair 1, Intern)</option>
-                  <option value="email">Email Address</option>
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="phone">Phone</option>
+                  <option value="label">Label</option>
+                  <option value="choice">Choice</option>
+                  <option value="email">Email</option>
+                  <option value="date">Date</option>
                 </select>
               </div>
 
-              {/* Toggles */}
+              {/* Choice options input */}
+              {newFieldType === 'choice' && (
+                <div className="mt-2">
+                  <label className="block text-[10px] font-semibold text-[#6b7770] mb-0.5">
+                    Options (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Intern, Full-Time, Contractor, On Leave"
+                    value={newFieldOptions}
+                    onChange={(e) => setNewFieldOptions(e.target.value)}
+                    className="w-full rounded-xl border border-[#e3e1d8] bg-[#f6f5f0] px-3 py-2 text-xs text-[#1d2b25] outline-hidden focus:border-[var(--theme-primary)] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                  />
+                </div>
+              )}
+
+              {/* Label formatting section */}
+              {newFieldType === 'label' && (
+                <div className="mt-2.5 rounded-lg border border-[#e3e1d8] bg-[#f6f5f0] p-2.5 dark:border-[#2b3731] dark:bg-[#121816]">
+                  <label className="block text-[11px] font-bold text-[#1d2b25] dark:text-[#e8efe9] mb-1.5">
+                    Label Formatting
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5 text-[11px] mb-2">
+                    <label className={`flex items-center gap-1.5 rounded-md border p-1.5 cursor-pointer transition ${
+                      newFieldLabelType === 'number' ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] text-[var(--theme-primary)] font-bold' : 'border-[#e3e1d8] dark:border-[#2b3731]'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="newLabelType"
+                        value="number"
+                        checked={newFieldLabelType === 'number'}
+                        onChange={() => setNewFieldLabelType('number')}
+                        className="accent-[var(--theme-primary)]"
+                      />
+                      <span>Numbered (1, 2, 3...)</span>
+                    </label>
+
+                    <label className={`flex items-center gap-1.5 rounded-md border p-1.5 cursor-pointer transition ${
+                      newFieldLabelType === 'letter' ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] text-[var(--theme-primary)] font-bold' : 'border-[#e3e1d8] dark:border-[#2b3731]'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="newLabelType"
+                        value="letter"
+                        checked={newFieldLabelType === 'letter'}
+                        onChange={() => setNewFieldLabelType('letter')}
+                        className="accent-[var(--theme-primary)]"
+                      />
+                      <span>Lettered (A, B, C...)</span>
+                    </label>
+
+                    <label className={`flex items-center gap-1.5 rounded-md border p-1.5 cursor-pointer transition ${
+                      newFieldLabelType === 'both' ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-light)] text-[var(--theme-primary)] font-bold' : 'border-[#e3e1d8] dark:border-[#2b3731]'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="newLabelType"
+                        value="both"
+                        checked={newFieldLabelType === 'both'}
+                        onChange={() => setNewFieldLabelType('both')}
+                        className="accent-[var(--theme-primary)]"
+                      />
+                      <span>Both (1-A, 1-B...)</span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 text-xs">
+                    <div className="col-span-2">
+                      <label className="block text-[10px] text-[#6b7770]">Prefix / Structure</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Pair , Group "
+                        value={newFieldLabelPrefix}
+                        onChange={(e) => setNewFieldLabelPrefix(e.target.value)}
+                        className="w-full rounded-md border border-[#e3e1d8] bg-white p-1 text-xs dark:border-[#2b3731] dark:bg-[#121816]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-[#6b7770]">Start From</label>
+                      <input
+                        type="number"
+                        value={newFieldLabelStartValue}
+                        onChange={(e) => setNewFieldLabelStartValue(Number(e.target.value))}
+                        className="w-full rounded-md border border-[#e3e1d8] bg-white p-1 text-xs dark:border-[#2b3731] dark:bg-[#121816]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-[#6b7770]">Step</label>
+                      <input
+                        type="number"
+                        value={newFieldLabelStep}
+                        onChange={(e) => setNewFieldLabelStep(Number(e.target.value))}
+                        className="w-full rounded-md border border-[#e3e1d8] bg-white p-1 text-xs dark:border-[#2b3731] dark:bg-[#121816]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Toggles: Required, Group, Display in roster, Order, W/A active */}
               <div className="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-[#6b7770] dark:text-[#92a199]">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={newFieldRequired}
                     onChange={(e) => setNewFieldRequired(e.target.checked)}
-                    className="rounded accent-[#116b52]"
+                    className="rounded accent-[var(--theme-primary)]"
                   />
-                  <span>Required parameter</span>
+                  <span>Required</span>
                 </label>
 
                 <label className="flex items-center gap-1.5 cursor-pointer">
@@ -1013,20 +2072,43 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                     type="checkbox"
                     checked={newFieldIsGroup}
                     onChange={(e) => setNewFieldIsGroup(e.target.checked)}
-                    className="rounded accent-[#116b52]"
+                    className="rounded accent-[var(--theme-primary)]"
                   />
-                  <span>Group parameter (Pair / Team)</span>
+                  <span>Group</span>
                 </label>
 
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={newFieldIsPhone}
-                    onChange={(e) => setNewFieldIsPhone(e.target.checked)}
-                    className="rounded accent-[#116b52]"
+                    checked={newFieldShowInRoster}
+                    onChange={(e) => setNewFieldShowInRoster(e.target.checked)}
+                    className="rounded accent-[var(--theme-primary)]"
                   />
-                  <span>Phone parameter</span>
+                  <span>Display in roster</span>
                 </label>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] font-semibold text-[#1d2b25] dark:text-[#e8efe9]">Order:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newFieldOrder}
+                    onChange={(e) => setNewFieldOrder(Number(e.target.value))}
+                    className="w-14 rounded-md border border-[#e3e1d8] bg-white px-2 py-0.5 text-xs text-center text-[#1d2b25] dark:border-[#2b3731] dark:bg-[#121816] dark:text-[#e8efe9]"
+                  />
+                </div>
+
+                {newFieldType === 'phone' && (
+                  <label className="flex items-center gap-1.5 cursor-pointer text-emerald-700 dark:text-emerald-400 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={newFieldIsWhatsappActive}
+                      onChange={(e) => setNewFieldIsWhatsappActive(e.target.checked)}
+                      className="rounded accent-emerald-600"
+                    />
+                    <span>W/A active</span>
+                  </label>
+                )}
               </div>
 
               <div className="mt-4 flex justify-end gap-2">
@@ -1039,7 +2121,7 @@ export const RollEditor: React.FC<RollEditorProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 rounded-xl bg-[#116b52] px-4 py-2 text-xs font-semibold text-white shadow-xs dark:bg-[#3fbf95] dark:text-[#0b1410]"
+                  className="flex items-center gap-1.5 rounded-xl bg-[var(--theme-primary)] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:opacity-90"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Add Parameter</span>

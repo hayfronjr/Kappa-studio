@@ -1,4 +1,4 @@
-import { AppState, Session, Roll, Member, MarkValue, RollField, AppSettings } from '../types';
+import { AppState, Session, Roll, Member, MarkValue, RollField, AppSettings, MemberTag } from '../types';
 import { getInitialSeedData } from '../data/seedData';
 
 const STORAGE_KEY = 'rollcall_app_v2';
@@ -33,13 +33,26 @@ export async function requestPersistentStorage(): Promise<boolean> {
 }
 
 export function normalizeRoll(roll: Roll): Roll {
-  const defaultFields: RollField[] = roll.fields && roll.fields.length > 0
+  const rawFields: RollField[] = roll.fields && roll.fields.length > 0
     ? roll.fields
     : [
         { id: 'unit', name: 'Affiliated Group / Unit', type: 'text', required: true },
-        { id: 'phone', name: 'Phone', type: 'phone', required: false, isPhoneField: true },
-        { id: 'tag', name: 'Pair #', type: 'tag', required: false, isGroupField: true },
+        { id: 'phone', name: 'Phone', type: 'phone', required: false, isPhoneField: true, isWhatsappActive: true },
+        { id: 'tag', name: 'Pair #', type: 'label', required: false, isGroupField: true },
       ];
+
+  const defaultFields: RollField[] = rawFields.map((f) => {
+    let t = f.type;
+    if ((t as string) === 'tag') t = 'label';
+    if ((t as string) === 'select') t = 'choice';
+    const isPhone = f.isPhoneField || t === 'phone';
+    return {
+      ...f,
+      type: t,
+      isPhoneField: isPhone,
+      isWhatsappActive: isPhone ? (f.isWhatsappActive !== false) : false,
+    };
+  });
 
   const members = (roll.members || []).map((m) => {
     const data = { ...(m.data || {}) };
@@ -49,6 +62,7 @@ export function normalizeRoll(roll: Roll): Roll {
     return {
       ...m,
       data,
+      memberTag: m.memberTag,
       unit: m.unit || data['unit'] || '',
       phone: m.phone || data['phone'] || '',
       tag: m.tag || data['tag'] || '',
@@ -65,13 +79,26 @@ export function normalizeRoll(roll: Roll): Roll {
 
 export function normalizeSession(session: Session, rolls: Roll[]): Session {
   const matchingRoll = rolls.find((r) => r.id === session.rollId);
-  const fields = session.fields && session.fields.length > 0
+  const rawFields = session.fields && session.fields.length > 0
     ? session.fields
     : matchingRoll?.fields || [
         { id: 'unit', name: 'Affiliated Group / Unit', type: 'text', required: true },
-        { id: 'phone', name: 'Phone', type: 'phone', required: false, isPhoneField: true },
-        { id: 'tag', name: 'Pair #', type: 'tag', required: false, isGroupField: true },
+        { id: 'phone', name: 'Phone', type: 'phone', required: false, isPhoneField: true, isWhatsappActive: true },
+        { id: 'tag', name: 'Pair #', type: 'label', required: false, isGroupField: true },
       ];
+
+  const fields: RollField[] = rawFields.map((f) => {
+    let t = f.type;
+    if ((t as string) === 'tag') t = 'label';
+    if ((t as string) === 'select') t = 'choice';
+    const isPhone = f.isPhoneField || t === 'phone';
+    return {
+      ...f,
+      type: t,
+      isPhoneField: isPhone,
+      isWhatsappActive: isPhone ? (f.isWhatsappActive !== false) : false,
+    };
+  });
 
   const members = (session.members || []).map((m) => {
     const data = { ...(m.data || {}) };
@@ -81,6 +108,7 @@ export function normalizeSession(session: Session, rolls: Roll[]): Session {
     return {
       ...m,
       data,
+      memberTag: m.memberTag,
       unit: m.unit || data['unit'] || '',
       phone: m.phone || data['phone'] || '',
       tag: m.tag || data['tag'] || '',
@@ -240,6 +268,222 @@ export function getGroupValue(
     }
   }
   return member.tag || member.data?.['tag'] || '';
+}
+
+/**
+ * Formats a group value based on the field's groupLabelType:
+ * - 'numbers': if "1", returns "Group 1" (or "Pair 1"). If "1 - Media", returns "Group 1: Media".
+ * - 'letters': if "A", returns "Group A". If "A - Media", returns "Group A: Media".
+ * - 'text': returns raw name e.g. "Editorial".
+ * Preserves group labels and group names together unless text was chosen.
+ */
+export function formatGroupDisplay(
+  rawVal: string,
+  fieldOrFields?: RollField | RollField[]
+): string {
+  if (!rawVal || !rawVal.trim()) return 'Unassigned';
+  const clean = rawVal.trim();
+
+  let field: RollField | undefined;
+  if (Array.isArray(fieldOrFields)) {
+    field = fieldOrFields.find((f) => f.isGroupField);
+  } else {
+    field = fieldOrFields;
+  }
+
+  if (!field) return clean;
+
+  const labelType = field.groupLabelType || (field.type === 'number' ? 'numbers' : 'text');
+  const prefix = /pair/i.test(field.name) ? 'Pair' : 'Group';
+
+  if (labelType === 'numbers') {
+    if (/^\d+$/.test(clean)) {
+      return `${prefix} ${clean}`;
+    }
+    const match = clean.match(/^(\d+)[\s\-:]+(.+)$/);
+    if (match) {
+      return `${prefix} ${match[1]}: ${match[2]}`;
+    }
+  } else if (labelType === 'letters') {
+    if (/^[A-Za-z]$/.test(clean)) {
+      return `Group ${clean.toUpperCase()}`;
+    }
+    const match = clean.match(/^([A-Za-z])[\s\-:]+(.+)$/);
+    if (match) {
+      return `Group ${match[1].toUpperCase()}: ${match[2]}`;
+    }
+  }
+
+  return clean;
+}
+
+/**
+ * Returns formatted parameter values to display under a member's name in roster and session views.
+ * Only values are returned (no parameter names), sorted by field order, separated by centered dots.
+ */
+export function getMemberDisplayValues(member: Member, fields?: RollField[]): string[] {
+  if (!fields || fields.length === 0) {
+    const fallback: string[] = [];
+    if (member.unit && member.unit.trim()) fallback.push(member.unit.trim());
+    if (member.tag && member.tag.trim()) fallback.push(member.tag.trim());
+    if (member.phone && member.phone.trim()) fallback.push(member.phone.trim());
+    return fallback;
+  }
+
+  return [...fields]
+    .filter((f) => f.showInRoster !== false)
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    .map((f) => {
+      const val = getMemberValue(member, f.id);
+      if (!val || !val.trim()) return null;
+      return f.type === 'label' ? formatGroupDisplay(val, f) : val.trim();
+    })
+    .filter((v): v is string => Boolean(v));
+}
+
+/**
+ * Checks whether a member's tag is currently active based on configured display times
+ */
+export function isMemberTagActive(tag?: MemberTag): boolean {
+  if (!tag || !tag.text || !tag.text.trim()) return false;
+
+  const now = new Date();
+
+  // If multi-parameter timing is configured:
+  if (tag.timing) {
+    const {
+      untilEnabled,
+      untilDateTime,
+      forEnabled,
+      forDurationMinutes,
+      everyEnabled,
+      everyDays,
+      everyStartTime,
+      everyEndTime,
+    } = tag.timing;
+
+    // If no timing parameter is enabled, it is permanent (active until manually removed)
+    if (!untilEnabled && !forEnabled && !everyEnabled) {
+      return true;
+    }
+
+    if (untilEnabled && untilDateTime) {
+      const until = new Date(untilDateTime);
+      if (!isNaN(until.getTime()) && now > until) {
+        return false;
+      }
+    }
+
+    if (forEnabled && forDurationMinutes && tag.createdAt) {
+      const created = new Date(tag.createdAt);
+      if (!isNaN(created.getTime())) {
+        const expiresAt = new Date(created.getTime() + forDurationMinutes * 60 * 1000);
+        if (now > expiresAt) {
+          return false;
+        }
+      }
+    }
+
+    if (everyEnabled) {
+      if (Array.isArray(everyDays) && everyDays.length > 0) {
+        if (!everyDays.includes(now.getDay())) {
+          return false;
+        }
+      }
+      if (everyStartTime && everyEndTime) {
+        const curMinutes = now.getHours() * 60 + now.getMinutes();
+        const [sh, sm] = everyStartTime.split(':').map(Number);
+        const [eh, em] = everyEndTime.split(':').map(Number);
+        const startMin = sh * 60 + (sm || 0);
+        const endMin = eh * 60 + (em || 0);
+        const inWindow =
+          startMin <= endMin
+            ? curMinutes >= startMin && curMinutes <= endMin
+            : curMinutes >= startMin || curMinutes <= endMin;
+        if (!inWindow) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  // Fallback for single timingType
+  const timing = tag.timingType || 'permanent';
+
+  if (timing === 'permanent') {
+    return true;
+  }
+
+  if (timing === 'until') {
+    if (!tag.untilDateTime) return true;
+    const until = new Date(tag.untilDateTime);
+    return !isNaN(until.getTime()) && now <= until;
+  }
+
+  if (timing === 'for') {
+    if (!tag.forDurationMinutes || !tag.createdAt) return true;
+    const created = new Date(tag.createdAt);
+    if (isNaN(created.getTime())) return true;
+    const expiresAt = new Date(created.getTime() + tag.forDurationMinutes * 60 * 1000);
+    return now <= expiresAt;
+  }
+
+  if (timing === 'every') {
+    if (Array.isArray(tag.everyDays) && tag.everyDays.length > 0) {
+      if (!tag.everyDays.includes(now.getDay())) {
+        return false;
+      }
+    }
+    if (tag.everyStartTime && tag.everyEndTime) {
+      const curMinutes = now.getHours() * 60 + now.getMinutes();
+      const [sh, sm] = tag.everyStartTime.split(':').map(Number);
+      const [eh, em] = tag.everyEndTime.split(':').map(Number);
+      const startMin = sh * 60 + (sm || 0);
+      const endMin = eh * 60 + (em || 0);
+
+      if (startMin <= endMin) {
+        return curMinutes >= startMin && curMinutes <= endMin;
+      } else {
+        return curMinutes >= startMin || curMinutes <= endMin;
+      }
+    }
+    return true;
+  }
+
+  return true;
+}
+
+/**
+ * Automatically assigns a label (e.g. Pair 1, Group A, Team 1-A)
+ * according to label formatting configuration and member index.
+ */
+export function generateAutoLabel(index: number, field: RollField): string {
+  const config = field.labelConfig || {
+    labelType: field.groupLabelType === 'letters' ? 'letter' : 'number',
+    prefix: /pair/i.test(field.name) ? 'Pair ' : /group/i.test(field.name) ? 'Group ' : '',
+    startValue: 1,
+    step: 1,
+    itemsPerLabel: /pair/i.test(field.name) ? 2 : 1,
+  };
+
+  const itemsPerLabel = Math.max(1, config.itemsPerLabel || 1);
+  const labelIndex = Math.floor(index / itemsPerLabel);
+  const numVal = (config.startValue || 1) + labelIndex * (config.step || 1);
+
+  if (config.labelType === 'letter') {
+    const letter = String.fromCharCode(65 + (labelIndex % 26));
+    return `${config.prefix || ''}${letter}`;
+  }
+
+  if (config.labelType === 'both') {
+    const subIdx = index % itemsPerLabel;
+    const subLetter = String.fromCharCode(65 + subIdx);
+    return `${config.prefix || ''}${numVal}-${subLetter}`;
+  }
+
+  return `${config.prefix || ''}${numVal}`;
 }
 
 /**

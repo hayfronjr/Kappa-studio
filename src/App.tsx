@@ -17,6 +17,7 @@ import { AppState, Session, Roll, AppSettings } from './types';
 import {
   loadAppState,
   saveAppState,
+  saveSettings,
   uid,
   formatDateOnly,
   requestPersistentStorage,
@@ -38,6 +39,12 @@ export default function App() {
 
   const currentSettings: AppSettings = state.settings || DEFAULT_SETTINGS;
 
+  const isEffectiveDark =
+    currentSettings.mode === 'dark' ||
+    (currentSettings.mode === 'system' &&
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+
   // Apply Theme color, Font, and Display Mode (Dark/Light/System)
   useEffect(() => {
     const root = document.documentElement;
@@ -58,6 +65,22 @@ export default function App() {
       }
     }
   }, [currentSettings.themeColor, currentSettings.font, currentSettings.mode]);
+
+  // Live listener for system dark/light changes when mode is 'system'
+  useEffect(() => {
+    if (currentSettings.mode !== 'system' || typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemMode = (e: MediaQueryListEvent) => {
+      const root = document.documentElement;
+      if (e.matches) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    };
+    mediaQuery.addEventListener('change', updateSystemMode);
+    return () => mediaQuery.removeEventListener('change', updateSystemMode);
+  }, [currentSettings.mode]);
 
   // Request storage persistence once on launch
   useEffect(() => {
@@ -85,10 +108,27 @@ export default function App() {
   }, []);
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
+    saveSettings(newSettings);
     setState((prev) => ({
       ...prev,
       settings: newSettings,
     }));
+    // Instant DOM synchronization so changes reflect without delay
+    const root = document.documentElement;
+    root.setAttribute('data-theme', newSettings.themeColor || 'green');
+    root.setAttribute('data-font', newSettings.font || 'sans');
+    if (newSettings.mode === 'dark') {
+      root.classList.add('dark');
+    } else if (newSettings.mode === 'light') {
+      root.classList.remove('dark');
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    }
   };
 
   // Handler to start a new roll call session
@@ -185,7 +225,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6f5f0] text-[#1d2b25] transition-colors dark:bg-[#121816] dark:text-[#e8efe9]">
+    <div className="min-h-screen bg-[var(--app-bg)] text-[var(--app-tx)] transition-colors">
       {/* Top Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -202,7 +242,7 @@ export default function App() {
             setActiveTab('rolls');
           }
         }}
-        darkMode={currentSettings.mode === 'dark'}
+        darkMode={isEffectiveDark}
         setDarkMode={(val) => {
           handleUpdateSettings({
             ...currentSettings,

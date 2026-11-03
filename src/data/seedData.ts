@@ -195,13 +195,21 @@ export function getInitialSeedData(): { rolls: Roll[]; sessions: Session[] } {
       type: 'phone',
       required: false,
       isPhoneField: true,
+      isWhatsappActive: true,
     },
     {
       id: 'tag',
       name: 'Pair #',
-      type: 'tag',
+      type: 'label',
       required: false,
       isGroupField: true,
+      labelConfig: {
+        labelType: 'number',
+        prefix: 'Pair ',
+        startValue: 1,
+        step: 1,
+        itemsPerLabel: 2,
+      },
     },
   ];
 

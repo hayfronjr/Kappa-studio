@@ -36,8 +36,8 @@ export const RollList: React.FC<RollListProps> = ({
       createdAt: new Date().toISOString(),
       fields: [
         { id: 'unit', name: 'Affiliated Group / Unit', type: 'text', required: true },
-        { id: 'phone', name: 'Phone', type: 'phone', required: false, isPhoneField: true },
-        { id: 'tag', name: 'Pair / Group #', type: 'tag', required: false, isGroupField: true },
+        { id: 'phone', name: 'Phone', type: 'phone', required: false, isPhoneField: true, isWhatsappActive: true },
+        { id: 'tag', name: 'Group', type: 'label', required: false, isGroupField: true, groupLabelType: 'numbers' },
       ],
       groupFieldId: 'tag',
       members: [],
@@ -120,11 +120,13 @@ export const RollList: React.FC<RollListProps> = ({
                   </p>
                 )}
 
-                <div className="mt-4 flex items-center gap-3 text-xs text-[#6b7770] dark:text-[#92a199]">
+                <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs text-[#6b7770] dark:text-[#92a199]">
                   <span className="flex items-center gap-1">
                     <CheckSquare className="h-3.5 w-3.5" />
                     {rollSessions.length} Registers Taken
                   </span>
+                  <span>•</span>
+                  <span>{roll.fields?.length || 3} parameters</span>
                 </div>
               </div>
 
